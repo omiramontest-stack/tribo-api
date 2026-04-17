@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  businessName String
+  createdAt    DateTime @default(now())
+}
+
+enum WalletType {
+  stamps
+  membership
+  points
+}
+
+model Wallet {
+  id           String     @id @default(cuid())
+  type         WalletType
+  businessName String
+  logoUrl      String?
+  primaryColor String
+  accentColor  String
+  description  String
+  rules        Json
+  createdAt    DateTime   @default(now())
+  passes       Pass[]
+}
+
+model Pass {
+  id           String   @id @default(cuid())
+  walletId     String
+  token        String   @unique @default(cuid())
+  customerName String
+  data         Json
+  createdAt    DateTime @default(now())
+  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+}
