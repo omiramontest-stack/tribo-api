@@ -106,8 +106,8 @@ export function authRoutes(
 
     app.post('/auth/logout', { preHandler: authenticate }, async (_request, reply) => {
       reply
-        .clearCookie('access_token', { path: '/' })
-        .clearCookie('refresh_token', { path: '/' })
+        .clearCookie('access_token', { ...COOKIE_OPTS, maxAge: 0 })
+        .clearCookie('refresh_token', { ...COOKIE_OPTS, maxAge: 0 })
         .send({ ok: true })
     })
 
