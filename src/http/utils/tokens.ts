@@ -2,8 +2,8 @@ import jwt from 'jsonwebtoken'
 
 export const COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'none' as const,
+  secure: true,
   path: '/',
 }
 
