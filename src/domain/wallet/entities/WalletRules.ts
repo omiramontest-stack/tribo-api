@@ -17,4 +17,18 @@ export interface PointsRules {
   rewardThreshold: number
 }
 
-export type WalletRules = StampsRules | MembershipRules | PointsRules
+export interface CashbackRules {
+  type: 'cashback'
+  cashbackPercent: number
+  currency: string
+}
+
+export interface DaypassRules {
+  type: 'daypass'
+  eventName: string
+  eventDate: string
+  venue: string
+  imageUrl: string | null
+}
+
+export type WalletRules = StampsRules | MembershipRules | PointsRules | CashbackRules | DaypassRules

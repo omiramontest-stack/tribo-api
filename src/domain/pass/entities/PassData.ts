@@ -14,4 +14,14 @@ export interface PointsData {
   currentPoints: number
 }
 
-export type PassData = StampsData | MembershipData | PointsData
+export interface CashbackData {
+  type: 'cashback'
+  balance: number
+}
+
+export interface DaypassData {
+  type: 'daypass'
+  used: boolean
+}
+
+export type PassData = StampsData | MembershipData | PointsData | CashbackData | DaypassData

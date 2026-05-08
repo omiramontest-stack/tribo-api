@@ -14,7 +14,7 @@ export class LoginUseCase implements UseCase<LoginDto, Admin> {
 
   async run(dto: LoginDto): Promise<Admin> {
     const result = await this._authRepository.findByEmail(dto.email)
-    if (!result) throw new AppError('INVALID_CREDENTIALS', 'Invalid credentials', 401)
+    if (!result || !result.passwordHash) throw new AppError('INVALID_CREDENTIALS', 'Invalid credentials', 401)
 
     const valid = await bcrypt.compare(dto.password, result.passwordHash)
     if (!valid) throw new AppError('INVALID_CREDENTIALS', 'Invalid credentials', 401)

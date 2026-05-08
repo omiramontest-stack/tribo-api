@@ -7,38 +7,330 @@ datasource db {
 }
 
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  businessName String
-  createdAt    DateTime @default(now())
+  id           String               @id @default(cuid())
+  email        String               @unique
+  passwordHash String?
+  googleId     String?              @unique
+  createdAt    DateTime             @default(now())
+  deletedAt    DateTime?
+  memberships  OrganizationMember[]
+}
+
+enum MemberRole {
+  owner
+  admin
+  staff
+}
+
+model Organization {
+  id        String               @id @default(cuid())
+  name      String
+  logoUrl   String?
+  industry  String?
+  country   String?
+  phone     String?
+  createdAt DateTime             @default(now())
+  deletedAt DateTime?
+  members      OrganizationMember[]
+  wallets      Wallet[]
+  invitations  Invitation[]
+  subscription Subscription?
+  smsCredit    SmsCredit?
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  adminId        String
+  role           MemberRole   @default(staff)
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  admin          Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, adminId])
+  @@index([adminId])
 }
 
 enum WalletType {
   stamps
   membership
   points
+  cashback
+  daypass
 }
 
 model Wallet {
-  id           String     @id @default(cuid())
-  type         WalletType
-  businessName String
-  logoUrl      String?
-  primaryColor String
-  accentColor  String
-  description  String
-  rules        Json
-  createdAt    DateTime   @default(now())
-  passes       Pass[]
+  id             String     @id @default(cuid())
+  organizationId String
+  type           WalletType
+  businessName   String
+  logoUrl        String?
+  primaryColor   String
+  accentColor    String
+  description    String
+  rules          Json
+  createdAt      DateTime   @default(now())
+  deletedAt      DateTime?
+  createdBy      String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  passes         Pass[]
+
+  @@index([organizationId])
+}
+
+model DeviceRegistration {
+  id                      String    @id @default(cuid())
+  deviceLibraryIdentifier String
+  passToken               String
+  pushToken               String
+  createdAt               DateTime  @default(now())
+  deletedAt               DateTime?
+
+  @@unique([deviceLibraryIdentifier, passToken])
+  @@index([passToken])
 }
 
 model Pass {
-  id           String   @id @default(cuid())
-  walletId     String
-  token        String   @unique @default(cuid())
-  customerName String
-  data         Json
-  createdAt    DateTime @default(now())
-  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  id                   String                @id @default(cuid())
+  walletId             String
+  token                String                @unique @default(cuid())
+  firstName            String
+  lastName             String
+  phone                String
+  email                String?
+  data                 Json
+  createdAt            DateTime              @default(now())
+  deletedAt            DateTime?
+  createdBy            String?
+  wallet               Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  cashbackTransactions CashbackTransaction[]
+  events               PassEvent[]
+  downloadTokens       PassDownloadToken[]
+
+  @@index([walletId])
+}
+
+model PassDownloadToken {
+  id        String    @id @default(cuid())
+  passId    String
+  passToken String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  pass      Pass      @relation(fields: [passId], references: [id], onDelete: Cascade)
+
+  @@index([passId])
+}
+
+model CashbackTransaction {
+  id              String   @id @default(cuid())
+  passId          String
+  purchaseAmount  Float
+  cashbackPercent Float
+  cashbackAmount  Float
+  description     String?
+  createdAt       DateTime @default(now())
+  createdBy       String?
+  pass            Pass     @relation(fields: [passId], references: [id], onDelete: Cascade)
+
+  @@index([passId])
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           MemberRole
+  token          String           @unique @default(cuid())
+  status         InvitationStatus @default(pending)
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  deletedAt      DateTime?
+  createdBy      String?
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+enum CampaignChannel {
+  sms
+  email
+  wallet_push
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  sending
+  sent
+  cancelled
+}
+
+enum CampaignRecipientStatus {
+  pending
+  sent
+  failed
+  skipped
+}
+
+model Campaign {
+  id              String           @id @default(cuid())
+  organizationId  String
+  walletId        String?
+  name            String
+  description     String?
+  channel         CampaignChannel
+  status          CampaignStatus   @default(draft)
+  segment         Json
+  messageTemplate String
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+  totalRecipients Int              @default(0)
+  totalSent       Int              @default(0)
+  totalFailed     Int              @default(0)
+  recipients      CampaignRecipient[]
+
+  @@index([organizationId, status])
+  @@index([status, scheduledAt])
+}
+
+model CampaignRecipient {
+  id         String                  @id @default(cuid())
+  campaignId String
+  passId     String
+  phone      String?
+  email      String?
+  pushToken  String?
+  variables  Json
+  status     CampaignRecipientStatus @default(pending)
+  sentAt     DateTime?
+  error      String?
+  createdAt  DateTime                @default(now())
+  campaign   Campaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+  @@index([passId])
+}
+
+// ─── Billing ────────────────────────────────────────────────────────────────
+
+enum PlanSlug {
+  trial
+  base
+  pro
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  cancelled
+}
+
+model Plan {
+  id             String        @id @default(cuid())
+  slug           PlanSlug      @unique
+  name           String
+  price          Float
+  currency       String        @default("MXN")
+  stripePriceId  String?
+  maxWallets     Int
+  maxPasses      Int?
+  emailCampaigns Boolean       @default(false)
+  smsCampaigns   Boolean       @default(false)
+  analyticsLevel String        @default("none")
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  subscriptions  Subscription[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  organizationId       String             @unique
+  planId               String
+  status               SubscriptionStatus @default(trialing)
+  trialEndsAt          DateTime?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  cancelledAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                 Plan               @relation(fields: [planId], references: [id])
+}
+
+model SmsCreditPack {
+  id            String   @id @default(cuid())
+  name          String
+  price         Float
+  currency      String   @default("MXN")
+  credits       Int
+  stripePriceId String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SmsCredit {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  balance        Int          @default(0)
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
+
+// ─── Analytics ──────────────────────────────────────────────────────────────
+
+enum PassEventType {
+  pass_created
+  pass_deleted
+  link_sent
+  stamp_added
+  stamp_redeemed
+  points_added
+  points_redeemed
+  cashback_added
+  cashback_redeemed
+  membership_renewed
+  daypass_scanned
+}
+
+model PassEvent {
+  id             String        @id @default(cuid())
+  organizationId String
+  walletId       String
+  passId         String
+  type           PassEventType
+  metadata       Json?
+  createdBy      String?
+  createdAt      DateTime      @default(now())
+  pass           Pass          @relation(fields: [passId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([passId, createdAt])
+  @@index([type, createdAt])
 }

@@ -1,4 +1,9 @@
 export interface GeneratePassDto {
   walletId: string
-  customerName: string
+  adminId: string
+  organizationId: string
+  firstName: string
+  lastName: string
+  phone: string
+  email?: string
 }

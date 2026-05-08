@@ -1,0 +1,648 @@
+{
+  "info": {
+    "name": "Wallet SaaS API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "org_id", "value": "" },
+    { "key": "wallet_id", "value": "" },
+    { "key": "pass_token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@example.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"Demo User\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.collectionVariables.set('token', json.token);",
+                  "if (json.admin?.organizationId) pm.collectionVariables.set('org_id', json.admin.organizationId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@example.com\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Google Auth",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/google",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"GOOGLE_ID_TOKEN_HERE\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{base_url}}/auth/onboarding",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationName\": \"Mi Empresa\",\n  \"industry\": \"Retail\",\n  \"country\": \"MX\",\n  \"phone\": \"+521234567890\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "My Organizations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/organizations/me"
+          }
+        },
+        {
+          "name": "Get Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/organizations/members"
+          }
+        },
+        {
+          "name": "Invite User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/organizations/invite",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"colaborador@example.com\",\n  \"role\": \"editor\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Invitation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/organizations/invitation/:token",
+              "path": ["organizations", "invitation", ":token"],
+              "variable": [{ "key": "token", "value": "INVITATION_TOKEN" }]
+            }
+          }
+        },
+        {
+          "name": "Accept Invitation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/organizations/invitation/accept",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"INVITATION_TOKEN\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wallets",
+      "item": [
+        {
+          "name": "Create Wallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.id) pm.collectionVariables.set('wallet_id', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/wallets",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Wallet Principal\",\n  \"type\": \"loyalty\",\n  \"foregroundColor\": \"#FFFFFF\",\n  \"backgroundColor\": \"#000000\",\n  \"labelColor\": \"#FFFFFF\",\n  \"logoUrl\": \"https://example.com/logo.png\",\n  \"rules\": {\n    \"pointsPerPeso\": 1,\n    \"cashbackPercent\": 5,\n    \"expirationDays\": 365\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Wallets",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/wallets"
+          }
+        },
+        {
+          "name": "Get Wallet by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wallets/:walletId",
+              "path": ["wallets", ":walletId"],
+              "variable": [{ "key": "walletId", "value": "{{wallet_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Delete Wallet",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wallets/:walletId",
+              "path": ["wallets", ":walletId"],
+              "variable": [{ "key": "walletId", "value": "{{wallet_id}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Passes",
+      "item": [
+        {
+          "name": "Generate Pass",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.collectionVariables.set('pass_token', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wallets/:walletId/passes",
+              "path": ["wallets", ":walletId", "passes"],
+              "variable": [{ "key": "walletId", "value": "{{wallet_id}}" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holderName\": \"Juan Pérez\",\n  \"holderEmail\": \"juan@example.com\",\n  \"holderPhone\": \"+521234567890\",\n  \"externalId\": \"CLIENTE-001\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Passes by Wallet",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wallets/:walletId/passes",
+              "path": ["wallets", ":walletId", "passes"],
+              "variable": [{ "key": "walletId", "value": "{{wallet_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Get Pass by Token (público)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/passes/:token",
+              "path": ["passes", ":token"],
+              "variable": [{ "key": "token", "value": "{{pass_token}}" }]
+            }
+          }
+        },
+        {
+          "name": "Update Pass Data",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/passes/:token",
+              "path": ["passes", ":token"],
+              "variable": [{ "key": "token", "value": "{{pass_token}}" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"points\": 150,\n  \"purchaseAmount\": 300\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Pass",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/passes/:token",
+              "path": ["passes", ":token"],
+              "variable": [{ "key": "token", "value": "{{pass_token}}" }]
+            }
+          }
+        },
+        {
+          "name": "Send Pass Link (SMS/WhatsApp)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/passes/:token/send-link",
+              "path": ["passes", ":token", "send-link"],
+              "variable": [{ "key": "token", "value": "{{pass_token}}" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"sms\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Scan Daypass",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/passes/:token/scan",
+              "path": ["passes", ":token", "scan"],
+              "variable": [{ "key": "token", "value": "{{pass_token}}" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Get Scanned Daypasses",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wallets/:walletId/scans",
+              "path": ["wallets", ":walletId", "scans"],
+              "variable": [{ "key": "walletId", "value": "{{wallet_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "Get Cashback Transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/passes/:token/cashback",
+              "path": ["passes", ":token", "cashback"],
+              "variable": [{ "key": "token", "value": "{{pass_token}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Org Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/analytics?from=2025-01-01&to=2025-12-31",
+              "raw": "{{base_url}}/analytics",
+              "query": [
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2025-12-31" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Wallet Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/analytics/wallets/:walletId",
+              "path": ["analytics", "wallets", ":walletId"],
+              "variable": [{ "key": "walletId", "value": "{{wallet_id}}" }],
+              "query": [
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2025-12-31" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns",
+      "item": [
+        {
+          "name": "Create Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/campaigns",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Promoción Mayo\",\n  \"channel\": \"wallet_push\",\n  \"messageTemplate\": \"¡Hola {{holderName}}! Tienes {{points}} puntos disponibles.\",\n  \"segment\": {\n    \"type\": \"all\",\n    \"walletId\": \"{{wallet_id}}\"\n  },\n  \"scheduledAt\": \"2025-05-10T12:00:00Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Campaigns",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/campaigns"
+          }
+        },
+        {
+          "name": "Get Campaign by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/campaigns/:campaignId",
+              "path": ["campaigns", ":campaignId"],
+              "variable": [{ "key": "campaignId", "value": "CAMPAIGN_ID" }]
+            }
+          }
+        },
+        {
+          "name": "Schedule Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/campaigns/:campaignId/schedule",
+              "path": ["campaigns", ":campaignId", "schedule"],
+              "variable": [{ "key": "campaignId", "value": "CAMPAIGN_ID" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduledAt\": \"2025-05-10T12:00:00Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Cancel Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/campaigns/:campaignId/cancel",
+              "path": ["campaigns", ":campaignId", "cancel"],
+              "variable": [{ "key": "campaignId", "value": "CAMPAIGN_ID" }]
+            }
+          }
+        },
+        {
+          "name": "Preview Audience",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/campaigns/preview-audience",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"segment\": {\n    \"type\": \"all\",\n    \"walletId\": \"{{wallet_id}}\"\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Billing",
+      "item": [
+        {
+          "name": "Get Billing Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/status"
+          }
+        },
+        {
+          "name": "Get Plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/plans"
+          }
+        },
+        {
+          "name": "Get SMS Packs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/sms-packs"
+          }
+        },
+        {
+          "name": "Start Trial",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/trial"
+          }
+        },
+        {
+          "name": "Create Checkout Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planSlug\": \"base\",\n  \"successUrl\": \"https://app.example.com/billing?success=true\",\n  \"cancelUrl\": \"https://app.example.com/billing?canceled=true\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Buy SMS Credits",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/buy-credits",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"packId\": \"PACK_ID_HERE\",\n  \"successUrl\": \"https://app.example.com/billing?success=true\",\n  \"cancelUrl\": \"https://app.example.com/billing?canceled=true\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Billing Portal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "x-organization-id", "value": "{{org_id}}" }
+            ],
+            "url": "{{base_url}}/billing/portal",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"returnUrl\": \"https://app.example.com/billing\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Stripe Webhook (test local)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "stripe-signature", "value": "TEST_SIGNATURE" }
+            ],
+            "url": "{{base_url}}/billing/webhook",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_test\",\n  \"type\": \"checkout.session.completed\",\n  \"data\": {}\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
