@@ -3,8 +3,8 @@ import { PKPass } from 'passkit-generator'
 import { Resvg } from '@resvg/resvg-js'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
-import type { StampsData, MembershipData, PointsData, CashbackData } from '../../domain/pass/entities/PassData.js'
-import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules } from '../../domain/wallet/entities/WalletRules.js'
+import type { StampsData, MembershipData, PointsData, CashbackData, BundleData, GiftCardData, CouponData } from '../../domain/pass/entities/PassData.js'
+import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules, BundleRules, GiftCardRules, CouponRules } from '../../domain/wallet/entities/WalletRules.js'
 
 const API_URL = process.env.API_URL!
 const PASS_TYPE_ID = process.env.APPLE_PASS_TYPE_ID!
@@ -233,6 +233,70 @@ function buildPassJson(wallet: Wallet, pass: Pass) {
         ],
         backFields: [
           { key: 'info', label: 'Acceso', value: 'Pase de un solo uso. Presenta este código QR en la entrada del evento.' },
+        ],
+      },
+    }
+  }
+
+  if (rules.type === 'bundle' && data.type === 'bundle') {
+    const r = rules as BundleRules
+    const d = data as BundleData
+    return {
+      ...base,
+      storeCard: {
+        primaryFields: [
+          { key: 'remaining', label: r.label, value: String(d.remainingUses) },
+        ],
+        secondaryFields: [
+          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+          { key: 'total', label: 'Total usos', value: String(r.totalUses) },
+        ],
+        backFields: [
+          { key: 'info', label: 'Cómo usar', value: `Presenta este código QR para consumir uno de tus ${r.totalUses} ${r.label}.` },
+        ],
+      },
+    }
+  }
+
+  if (rules.type === 'giftcard' && data.type === 'giftcard') {
+    const r = rules as GiftCardRules
+    const d = data as GiftCardData
+    return {
+      ...base,
+      storeCard: {
+        primaryFields: [
+          { key: 'balance', label: 'Saldo disponible', value: `${r.currency} ${d.currentBalance.toFixed(2)}` },
+        ],
+        secondaryFields: [
+          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+          { key: 'initial', label: 'Saldo inicial', value: `${r.currency} ${d.initialBalance.toFixed(2)}` },
+        ],
+        backFields: [
+          { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR para redimir tu saldo de gift card.' },
+        ],
+      },
+    }
+  }
+
+  if (rules.type === 'coupon' && data.type === 'coupon') {
+    const r = rules as CouponRules
+    const d = data as CouponData
+    const discountLabel = r.discountType === 'percent'
+      ? `${r.discount}% de descuento`
+      : `${r.currency ?? ''} ${r.discount} de descuento`
+    return {
+      ...base,
+      coupon: {
+        primaryFields: [
+          { key: 'discount', label: 'Descuento', value: discountLabel },
+        ],
+        secondaryFields: [
+          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+          { key: 'status', label: 'Estado', value: d.used ? 'Usado' : 'Disponible' },
+        ],
+        backFields: [
+          { key: 'expires', label: 'Vence', value: d.expiresAt ? new Date(d.expiresAt).toLocaleDateString('es-MX') : 'Sin vencimiento' },
+          { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR al momento del pago para aplicar el descuento.' },
         ],
       },
     }

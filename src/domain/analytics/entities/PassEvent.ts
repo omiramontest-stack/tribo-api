@@ -10,6 +10,10 @@ export type PassEventType =
   | 'cashback_redeemed'
   | 'membership_renewed'
   | 'daypass_scanned'
+  | 'bundle_used'
+  | 'giftcard_credited'
+  | 'giftcard_redeemed'
+  | 'coupon_redeemed'
 
 export interface PassEvent {
   id: string

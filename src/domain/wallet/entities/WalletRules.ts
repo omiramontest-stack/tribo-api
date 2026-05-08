@@ -31,4 +31,24 @@ export interface DaypassRules {
   imageUrl: string | null
 }
 
-export type WalletRules = StampsRules | MembershipRules | PointsRules | CashbackRules | DaypassRules
+export interface BundleRules {
+  type: 'bundle'
+  totalUses: number
+  label: string
+}
+
+export interface GiftCardRules {
+  type: 'giftcard'
+  initialBalance: number
+  currency: string
+}
+
+export interface CouponRules {
+  type: 'coupon'
+  discount: number
+  discountType: 'percent' | 'fixed'
+  currency?: string
+  expiresInDays: number | null
+}
+
+export type WalletRules = StampsRules | MembershipRules | PointsRules | CashbackRules | DaypassRules | BundleRules | GiftCardRules | CouponRules

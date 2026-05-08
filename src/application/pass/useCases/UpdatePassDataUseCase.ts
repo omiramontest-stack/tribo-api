@@ -100,6 +100,28 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       })
       eventType = 'cashback_redeemed'
       eventMetadata = { amount: redeemAmount, balance: pass.data.balance }
+    } else if (dto.action === 'use_bundle' && pass.data.type === 'bundle') {
+      if (pass.data.remainingUses <= 0) throw new AppError('NO_USES_LEFT', 'No remaining uses on this bundle', 400)
+      pass.data = { ...pass.data, remainingUses: pass.data.remainingUses - 1 }
+      eventType = 'bundle_used'
+      eventMetadata = { remainingUses: pass.data.remainingUses }
+    } else if (dto.action === 'add_giftcard' && pass.data.type === 'giftcard') {
+      if (!dto.amount || dto.amount <= 0) throw new AppError('INVALID_INPUT', 'amount is required and must be positive', 400)
+      pass.data = { ...pass.data, currentBalance: roundCents(pass.data.currentBalance + dto.amount) }
+      eventType = 'giftcard_credited'
+      eventMetadata = { amount: dto.amount, currentBalance: pass.data.currentBalance }
+    } else if (dto.action === 'subtract_giftcard' && pass.data.type === 'giftcard') {
+      if (!dto.amount || dto.amount <= 0) throw new AppError('INVALID_INPUT', 'amount is required and must be positive', 400)
+      if (dto.amount > pass.data.currentBalance) throw new AppError('INSUFFICIENT_BALANCE', `Cannot redeem ${dto.amount}, current balance is ${pass.data.currentBalance}`, 400)
+      pass.data = { ...pass.data, currentBalance: roundCents(pass.data.currentBalance - dto.amount) }
+      eventType = 'giftcard_redeemed'
+      eventMetadata = { amount: dto.amount, currentBalance: pass.data.currentBalance }
+    } else if (dto.action === 'redeem_coupon' && pass.data.type === 'coupon') {
+      if (pass.data.used) throw new AppError('COUPON_ALREADY_USED', 'This coupon has already been redeemed', 400)
+      if (pass.data.expiresAt && new Date(pass.data.expiresAt) < new Date()) throw new AppError('COUPON_EXPIRED', 'This coupon has expired', 400)
+      pass.data = { ...pass.data, used: true }
+      eventType = 'coupon_redeemed'
+      eventMetadata = {}
     } else {
       throw new AppError('ACTION_MISMATCH', 'Action does not match pass type', 400)
     }

@@ -14,10 +14,13 @@ const rulesSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('points'), pointsLabel: z.string(), reward: z.string(), rewardThreshold: z.number().int().min(1) }),
   z.object({ type: z.literal('cashback'), cashbackPercent: z.number().positive().max(100), currency: z.string().min(1) }),
   z.object({ type: z.literal('daypass'), eventName: z.string().min(1), eventDate: z.string().min(1), venue: z.string().min(1), imageUrl: z.string().url().nullable().optional().transform(v => v ?? null) }),
+  z.object({ type: z.literal('bundle'), totalUses: z.number().int().min(1), label: z.string().min(1) }),
+  z.object({ type: z.literal('giftcard'), initialBalance: z.number().positive(), currency: z.string().min(1) }),
+  z.object({ type: z.literal('coupon'), discount: z.number().positive(), discountType: z.enum(['percent', 'fixed']), currency: z.string().optional(), expiresInDays: z.number().int().nullable() }),
 ])
 
 const createSchema = z.object({
-  type: z.enum(['stamps', 'membership', 'points', 'cashback', 'daypass']),
+  type: z.enum(['stamps', 'membership', 'points', 'cashback', 'daypass', 'bundle', 'giftcard', 'coupon']),
   businessName: z.string().min(1),
   logoUrl: z.string().url().or(z.literal('')).nullable().optional(),
   primaryColor: z.string(),

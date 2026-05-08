@@ -3,8 +3,8 @@ import { GoogleAuth } from 'google-auth-library'
 import jwt from 'jsonwebtoken'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
-import type { StampsData, MembershipData, PointsData, CashbackData, DaypassData } from '../../domain/pass/entities/PassData.js'
-import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules } from '../../domain/wallet/entities/WalletRules.js'
+import type { StampsData, MembershipData, PointsData, CashbackData, DaypassData, BundleData, GiftCardData, CouponData } from '../../domain/pass/entities/PassData.js'
+import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules, BundleRules, GiftCardRules, CouponRules } from '../../domain/wallet/entities/WalletRules.js'
 
 const ISSUER_ID = process.env.GOOGLE_WALLET_ISSUER_ID!
 const API_URL = process.env.API_URL!
@@ -45,6 +45,9 @@ function buildLoyaltyClass(wallet: Wallet) {
   else if (rules.type === 'membership') rewardsTier = (rules as MembershipRules).level
   else if (rules.type === 'cashback') rewardsTier = `${(rules as CashbackRules).cashbackPercent}% Cashback`
   else if (rules.type === 'daypass') rewardsTier = (rules as DaypassRules).eventName
+  else if (rules.type === 'bundle') rewardsTier = (rules as BundleRules).label
+  else if (rules.type === 'giftcard') rewardsTier = `Gift Card ${(rules as GiftCardRules).currency}`
+  else if (rules.type === 'coupon') rewardsTier = `${(rules as CouponRules).discount}${(rules as CouponRules).discountType === 'percent' ? '%' : ` ${(rules as CouponRules).currency ?? ''}`} descuento`
 
   return {
     id: classId,
@@ -100,6 +103,22 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
     const _d = data as DaypassData
     points = { balance: { string: new Date(r.eventDate).toLocaleDateString('es-MX') }, label: 'Fecha' }
     secondaryText = `Lugar: ${r.venue}`
+  } else if (rules.type === 'bundle' && data.type === 'bundle') {
+    const r = rules as BundleRules
+    const d = data as BundleData
+    points = { balance: { string: `${d.remainingUses} / ${r.totalUses}` }, label: r.label }
+    secondaryText = `Usos restantes: ${d.remainingUses}`
+  } else if (rules.type === 'giftcard' && data.type === 'giftcard') {
+    const r = rules as GiftCardRules
+    const d = data as GiftCardData
+    points = { balance: { string: `${r.currency} ${d.currentBalance.toFixed(2)}` }, label: 'Saldo disponible' }
+    secondaryText = `Saldo inicial: ${r.currency} ${d.initialBalance.toFixed(2)}`
+  } else if (rules.type === 'coupon' && data.type === 'coupon') {
+    const r = rules as CouponRules
+    const d = data as CouponData
+    const discountLabel = r.discountType === 'percent' ? `${r.discount}%` : `${r.currency ?? ''} ${r.discount}`
+    points = { balance: { string: discountLabel }, label: 'Descuento' }
+    secondaryText = d.used ? 'Cupón usado' : (d.expiresAt ? `Vence: ${new Date(d.expiresAt).toLocaleDateString('es-MX')}` : 'Sin vencimiento')
   }
 
   return {

@@ -58,6 +58,9 @@ enum WalletType {
   points
   cashback
   daypass
+  bundle
+  giftcard
+  coupon
 }
 
 model Wallet {
@@ -316,6 +319,10 @@ enum PassEventType {
   cashback_redeemed
   membership_renewed
   daypass_scanned
+  bundle_used
+  giftcard_credited
+  giftcard_redeemed
+  coupon_redeemed
 }
 
 model PassEvent {

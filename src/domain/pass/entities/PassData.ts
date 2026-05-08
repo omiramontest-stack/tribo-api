@@ -24,4 +24,21 @@ export interface DaypassData {
   used: boolean
 }
 
-export type PassData = StampsData | MembershipData | PointsData | CashbackData | DaypassData
+export interface BundleData {
+  type: 'bundle'
+  remainingUses: number
+}
+
+export interface GiftCardData {
+  type: 'giftcard'
+  initialBalance: number
+  currentBalance: number
+}
+
+export interface CouponData {
+  type: 'coupon'
+  used: boolean
+  expiresAt: string | null
+}
+
+export type PassData = StampsData | MembershipData | PointsData | CashbackData | DaypassData | BundleData | GiftCardData | CouponData

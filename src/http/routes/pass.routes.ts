@@ -11,6 +11,7 @@ import type { GetScannedDaypassesUseCase } from '../../application/pass/useCases
 import type { SendPassLinkUseCase } from '../../application/pass/useCases/SendPassLinkUseCase.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminCookie } from '../middlewares/authenticate.js'
+import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
 
@@ -22,7 +23,7 @@ const generateSchema = z.object({
 })
 
 const updateSchema = z.object({
-  action: z.enum(['add_stamp', 'add_points', 'renew_membership', 'add_cashback', 'subtract_cashback']),
+  action: z.enum(['add_stamp', 'add_points', 'renew_membership', 'add_cashback', 'subtract_cashback', 'use_bundle', 'add_giftcard', 'subtract_giftcard', 'redeem_coupon']),
   amount: z.number().int().positive().optional(),
   purchaseAmount: z.number().positive().optional(),
   cashbackPercent: z.number().positive().max(100).optional(),
@@ -142,6 +143,13 @@ export function passRoutes(
       const { token } = request.params as { token: string }
       await deletePass.run({ token, adminId: request.admin.adminId, organizationId: request.admin.organizationId! })
       reply.code(204).send()
+    })
+
+    app.get('/passes/:token/google-wallet-url', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
+      const { token } = request.params as { token: string }
+      const { pass, wallet } = await getPassByToken.run(token)
+      const url = await generateGoogleWalletUrl(wallet, pass)
+      reply.send({ url })
     })
   }
 }
