@@ -13,8 +13,8 @@ import type {
   EventBreakdownItem,
 } from '../../../domain/analytics/repository/AnalyticsRepository.js'
 
-const SCAN_TYPES: PassEventType[] = ['stamp_added', 'stamp_redeemed', 'points_added', 'points_redeemed', 'cashback_added', 'cashback_redeemed', 'membership_renewed', 'daypass_scanned']
-const REDEEM_TYPES: PassEventType[] = ['stamp_redeemed', 'points_redeemed', 'cashback_redeemed']
+const SCAN_TYPES: PassEventType[] = ['stamp_added', 'stamp_redeemed', 'points_added', 'points_redeemed', 'cashback_added', 'cashback_redeemed', 'membership_renewed', 'daypass_scanned', 'bundle_used', 'giftcard_credited', 'giftcard_redeemed', 'coupon_redeemed']
+const REDEEM_TYPES: PassEventType[] = ['stamp_redeemed', 'points_redeemed', 'cashback_redeemed', 'bundle_used', 'giftcard_redeemed', 'coupon_redeemed']
 const INACTIVE_THRESHOLD_DAYS = 30
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
