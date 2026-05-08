@@ -119,7 +119,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const loginUseCase = new LoginUseCase(authRepo)
   const registerUseCase = new RegisterUseCase(authRepo)
   const googleAuthUseCase = new GoogleAuthUseCase(authRepo)
-  const onboardingUseCase = new OnboardingUseCase(orgRepo, createTrial)
+  const onboardingUseCase = new OnboardingUseCase(orgRepo, createTrial, prisma)
 
   // Organization use cases
   const getMyOrganizations = new GetMyOrganizationsUseCase(orgRepo)

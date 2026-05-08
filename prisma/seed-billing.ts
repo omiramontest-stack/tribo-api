@@ -9,15 +9,25 @@ async function main() {
   // ── Plans ────────────────────────────────────────────────────────────────
   await prisma.plan.upsert({
     where: { slug: 'trial' },
-    update: {},
+    update: {
+      name: 'Prueba gratuita',
+      price: 0,
+      stripePriceId: null,
+      maxWallets: 3,
+      maxPasses: 10,
+      emailCampaigns: false,
+      smsCampaigns: false,
+      analyticsLevel: 'basic',
+      isActive: true,
+    },
     create: {
       slug: 'trial',
-      name: 'Trial',
+      name: 'Prueba gratuita',
       price: 0,
       currency: 'MXN',
       stripePriceId: null,
       maxWallets: 3,
-      maxPasses: 30,
+      maxPasses: 10,
       emailCampaigns: false,
       smsCampaigns: false,
       analyticsLevel: 'basic',
@@ -30,18 +40,20 @@ async function main() {
     update: {
       name: 'Base',
       price: 149,
+      stripePriceId: 'price_1TTSDXAPwkRIj7DiJp1eH90u',
       maxWallets: 6,
       maxPasses: null,
       emailCampaigns: true,
       smsCampaigns: true,
       analyticsLevel: 'basic',
+      isActive: true,
     },
     create: {
       slug: 'base',
       name: 'Base',
       price: 149,
       currency: 'MXN',
-      stripePriceId: process.env.STRIPE_PRICE_BASE ?? null,
+      stripePriceId: 'price_1TTSDXAPwkRIj7DiJp1eH90u',
       maxWallets: 6,
       maxPasses: null,
       emailCampaigns: true,
@@ -56,18 +68,20 @@ async function main() {
     update: {
       name: 'Pro',
       price: 399,
+      stripePriceId: 'price_1TTSHkAPwkRIj7DiTwkZgwY2',
       maxWallets: 30,
       maxPasses: null,
       emailCampaigns: true,
       smsCampaigns: true,
       analyticsLevel: 'full',
+      isActive: true,
     },
     create: {
       slug: 'pro',
       name: 'Pro',
       price: 399,
       currency: 'MXN',
-      stripePriceId: process.env.STRIPE_PRICE_PRO ?? null,
+      stripePriceId: 'price_1TTSHkAPwkRIj7DiTwkZgwY2',
       maxWallets: 30,
       maxPasses: null,
       emailCampaigns: true,
@@ -81,14 +95,20 @@ async function main() {
 
   // ── SMS Credit Packs ─────────────────────────────────────────────────────
   const packs = [
-    { name: 'Básico', price: 99, credits: 150, priceId: process.env.STRIPE_PRICE_SMS_BASIC ?? null },
-    { name: 'Popular', price: 249, credits: 500, priceId: process.env.STRIPE_PRICE_SMS_POPULAR ?? null },
-    { name: 'Grande', price: 499, credits: 1200, priceId: process.env.STRIPE_PRICE_SMS_LARGE ?? null },
+    { name: 'Básico',  price: 135, credits: 150,  priceId: 'price_1TTSOtAPwkRIj7DihuD5EDUZ' },
+    { name: 'Popular', price: 349, credits: 400,  priceId: 'price_1TTSQnAPwkRIj7DiK2ccwEnI' },
+    { name: 'Grande',  price: 829, credits: 1000, priceId: 'price_1TTSTfAPwkRIj7DiQdbzco0x' },
+    { name: 'Prueba',  price: 49,  credits: 50,   priceId: 'price_1TTSOtAPwkRIj7DihuD5EDUZ' },
   ]
 
   for (const pack of packs) {
     const existing = await prisma.smsCreditPack.findFirst({ where: { name: pack.name } })
-    if (!existing) {
+    if (existing) {
+      await prisma.smsCreditPack.update({
+        where: { id: existing.id },
+        data: { price: pack.price, credits: pack.credits, stripePriceId: pack.priceId },
+      })
+    } else {
       await prisma.smsCreditPack.create({
         data: {
           name: pack.name,

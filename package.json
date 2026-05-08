@@ -9,6 +9,7 @@
     "start:prod": "prisma migrate deploy && node dist/server.js",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:billing": "tsx prisma/seed-billing.ts",
     "db:studio": "prisma studio",
     "type-check": "tsc --noEmit"
   },
