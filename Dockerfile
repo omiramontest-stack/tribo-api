@@ -21,6 +21,7 @@ COPY prisma ./prisma/
 COPY prisma.config.ts ./
 
 RUN npm ci --omit=dev
+RUN npm install @resvg/resvg-js-linux-x64-musl --no-save
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
