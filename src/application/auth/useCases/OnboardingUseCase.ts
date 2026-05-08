@@ -24,14 +24,28 @@ export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
 
   async run(dto: OnboardingDto): Promise<Organization> {
     const existing = await this._orgRepository.findByAdminId(dto.adminId)
-    if (existing.length > 0) throw new AppError('ALREADY_ONBOARDED', 'Already has an organization', 409)
+
+    if (existing.length > 0) {
+      const org = existing[0]
+      const subscription = await this._db.subscription.findUnique({ where: { organizationId: org.id } })
+      if (subscription) throw new AppError('ALREADY_ONBOARDED', 'Already has an organization', 409)
+
+      // org exists but no subscription (orphaned) — create trial
+      await this._createTrial.run(org.id)
+      return org
+    }
+
+    const trialPlan = await this._db.plan.findUnique({ where: { slug: 'trial' } })
+    if (!trialPlan) throw new AppError('PLAN_NOT_FOUND', 'Trial plan not configured', 500)
 
     const orgId = randomUUID()
     const memberId = randomUUID()
+    const subscriptionId = randomUUID()
     const now = new Date()
+    const trialEndsAt = new Date(now.getTime() + 14 * 86400000)
 
-    const org = await this._db.$transaction(async (tx) => {
-      const orgRow = await tx.organization.create({
+    const [orgRow] = await this._db.$transaction([
+      this._db.organization.create({
         data: {
           id: orgId,
           name: dto.organizationName,
@@ -40,25 +54,18 @@ export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
           country: dto.country ?? null,
           phone: dto.phone ?? null,
         },
-      })
-
-      await tx.organizationMember.create({
+      }),
+      this._db.organizationMember.create({
         data: {
           id: memberId,
           organizationId: orgId,
           adminId: dto.adminId,
           role: 'owner',
         },
-      })
-
-      const trialPlan = await tx.plan.findUnique({ where: { slug: 'trial' } })
-      if (!trialPlan) throw new AppError('PLAN_NOT_FOUND', 'Trial plan not configured', 500)
-
-      const trialEndsAt = new Date(now.getTime() + 14 * 86400000)
-
-      await tx.subscription.create({
+      }),
+      this._db.subscription.create({
         data: {
-          id: randomUUID(),
+          id: subscriptionId,
           organizationId: orgId,
           planId: trialPlan.id,
           status: 'trialing',
@@ -70,19 +77,17 @@ export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
           stripePriceId: null,
           cancelledAt: null,
         },
-      })
+      }),
+    ])
 
-      return {
-        id: orgRow.id,
-        name: orgRow.name,
-        logoUrl: orgRow.logoUrl,
-        industry: orgRow.industry,
-        country: orgRow.country,
-        phone: orgRow.phone,
-        createdAt: orgRow.createdAt.toISOString(),
-      } satisfies Organization
-    })
-
-    return org
+    return {
+      id: orgRow.id,
+      name: orgRow.name,
+      logoUrl: orgRow.logoUrl,
+      industry: orgRow.industry,
+      country: orgRow.country,
+      phone: orgRow.phone,
+      createdAt: orgRow.createdAt.toISOString(),
+    }
   }
 }
