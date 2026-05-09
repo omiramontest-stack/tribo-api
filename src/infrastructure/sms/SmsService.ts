@@ -12,7 +12,7 @@ export async function sendPassLinkSms(opts: {
     return
   }
 
-  const body = `Hola ${opts.firstName}, ${opts.organizationName} te invita a descargar tu wallet. Descárgalo aquí: ${opts.passUrl}`
+  const body = `${opts.organizationName}: Descarga tu wallet aquí: ${opts.passUrl}`
 
   const res = await fetch('https://api.telnyx.com/v2/messages', {
     method: 'POST',
