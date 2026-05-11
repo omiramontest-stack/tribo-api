@@ -18,6 +18,6 @@ export class GoogleAuthUseCase implements UseCase<GoogleAuthDto, Admin> {
     const byEmail = await this._authRepository.findByEmail(dto.email)
     if (byEmail) return byEmail.admin
 
-    return this._authRepository.create({ email: dto.email, googleId: dto.googleId })
+    return this._authRepository.create({ email: dto.email, googleId: dto.googleId, emailVerified: true })
   }
 }

@@ -5,6 +5,7 @@ export interface JwtPayload {
   adminId: string
   email: string
   organizationId?: string
+  emailVerified: boolean
 }
 
 declare module 'fastify' {

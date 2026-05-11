@@ -7,13 +7,16 @@ datasource db {
 }
 
 model Admin {
-  id           String               @id @default(cuid())
-  email        String               @unique
-  passwordHash String?
-  googleId     String?              @unique
-  createdAt    DateTime             @default(now())
-  deletedAt    DateTime?
-  memberships  OrganizationMember[]
+  id                              String               @id @default(cuid())
+  email                           String               @unique
+  passwordHash                    String?
+  googleId                        String?              @unique
+  emailVerified                   Boolean              @default(false)
+  emailVerificationToken          String?              @unique
+  emailVerificationTokenExpiresAt DateTime?
+  createdAt                       DateTime             @default(now())
+  deletedAt                       DateTime?
+  memberships                     OrganizationMember[]
 }
 
 enum MemberRole {

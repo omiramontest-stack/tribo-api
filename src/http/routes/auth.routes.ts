@@ -5,6 +5,8 @@ import type { LoginUseCase } from '../../application/auth/useCases/LoginUseCase.
 import type { RegisterUseCase } from '../../application/auth/useCases/RegisterUseCase.js'
 import type { GoogleAuthUseCase } from '../../application/auth/useCases/GoogleAuthUseCase.js'
 import type { OnboardingUseCase } from '../../application/auth/useCases/OnboardingUseCase.js'
+import type { SendVerificationEmailUseCase } from '../../application/auth/useCases/SendVerificationEmailUseCase.js'
+import type { VerifyEmailUseCase } from '../../application/auth/useCases/VerifyEmailUseCase.js'
 import type { OrganizationRepository } from '../../domain/organization/repository/OrganizationRepository.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { signTokens, COOKIE_OPTS } from '../utils/tokens.js'
@@ -38,6 +40,8 @@ export function authRoutes(
   googleAuthUseCase: GoogleAuthUseCase,
   onboardingUseCase: OnboardingUseCase,
   orgRepository: OrganizationRepository,
+  sendVerificationEmail: SendVerificationEmailUseCase,
+  verifyEmail: VerifyEmailUseCase,
 ) {
   return async (app: FastifyInstance) => {
     app.post('/auth/register', async (request, reply) => {
@@ -45,7 +49,7 @@ export function authRoutes(
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
       const admin = await registerUseCase.run(body.data)
-      const { accessToken, refreshToken } = signTokens(admin.id, admin.email)
+      const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
@@ -59,7 +63,29 @@ export function authRoutes(
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
       const organization = await onboardingUseCase.run({ adminId: request.admin.adminId, ...body.data })
+
+      sendVerificationEmail.run({ adminId: request.admin.adminId, email: request.admin.email }).catch((err) => {
+        app.log.error(err, 'Failed to send verification email after onboarding')
+      })
+
       reply.code(201).send({ organization })
+    })
+
+    app.post('/auth/verify-email/:token', async (request, reply) => {
+      const { token } = request.params as { token: string }
+
+      const admin = await verifyEmail.run(token)
+      const { accessToken, refreshToken } = signTokens(admin.id, admin.email, request.admin?.organizationId, true)
+
+      reply
+        .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
+        .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
+        .send({ ok: true })
+    })
+
+    app.post('/auth/resend-verification', { preHandler: authenticate }, async (request, reply) => {
+      await sendVerificationEmail.run({ adminId: request.admin.adminId, email: request.admin.email })
+      reply.send({ ok: true })
     })
 
     app.post('/auth/login', async (request, reply) => {
@@ -67,7 +93,7 @@ export function authRoutes(
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
       const admin = await loginUseCase.run(body.data)
-      const { accessToken, refreshToken } = signTokens(admin.id, admin.email)
+      const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
@@ -82,7 +108,7 @@ export function authRoutes(
       const isMember = await orgRepository.isMember(request.admin.adminId, body.data.organizationId)
       if (!isMember) return reply.code(403).send({ error: 'Forbidden' })
 
-      const { accessToken, refreshToken } = signTokens(request.admin.adminId, request.admin.email, body.data.organizationId)
+      const { accessToken, refreshToken } = signTokens(request.admin.adminId, request.admin.email, body.data.organizationId, request.admin.emailVerified)
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
@@ -94,8 +120,8 @@ export function authRoutes(
       if (!token) return reply.code(401).send({ error: 'No refresh token' })
 
       try {
-        const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET!) as { adminId: string; email: string; organizationId?: string }
-        const { accessToken } = signTokens(payload.adminId, payload.email, payload.organizationId)
+        const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET!) as { adminId: string; email: string; organizationId?: string; emailVerified?: boolean }
+        const { accessToken } = signTokens(payload.adminId, payload.email, payload.organizationId, payload.emailVerified ?? false)
         reply
           .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
           .send({ ok: true })
@@ -157,7 +183,7 @@ export function authRoutes(
         name: payload.name,
       })
 
-      const { accessToken, refreshToken } = signTokens(admin.id, admin.email)
+      const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
 
       const clientUrl = (process.env.CLIENT_URL ?? 'http://localhost:5173').split(',')[0].trim()
 

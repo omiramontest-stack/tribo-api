@@ -16,6 +16,8 @@ import { LoginUseCase } from '../application/auth/useCases/LoginUseCase.js'
 import { RegisterUseCase } from '../application/auth/useCases/RegisterUseCase.js'
 import { GoogleAuthUseCase } from '../application/auth/useCases/GoogleAuthUseCase.js'
 import { OnboardingUseCase } from '../application/auth/useCases/OnboardingUseCase.js'
+import { SendVerificationEmailUseCase } from '../application/auth/useCases/SendVerificationEmailUseCase.js'
+import { VerifyEmailUseCase } from '../application/auth/useCases/VerifyEmailUseCase.js'
 
 // Use cases — organization
 import { GetMyOrganizationsUseCase } from '../application/organization/useCases/GetMyOrganizationsUseCase.js'
@@ -120,6 +122,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const registerUseCase = new RegisterUseCase(authRepo)
   const googleAuthUseCase = new GoogleAuthUseCase(authRepo)
   const onboardingUseCase = new OnboardingUseCase(orgRepo, createTrial, prisma)
+  const sendVerificationEmail = new SendVerificationEmailUseCase(authRepo)
+  const verifyEmail = new VerifyEmailUseCase(authRepo)
 
   // Organization use cases
   const getMyOrganizations = new GetMyOrganizationsUseCase(orgRepo)
@@ -181,7 +185,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const planGuard = createPlanGuard(billingRepo)
 
   // Routes
-  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo))
+  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard))

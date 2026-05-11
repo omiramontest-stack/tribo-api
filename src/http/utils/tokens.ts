@@ -7,8 +7,8 @@ export const COOKIE_OPTS = {
   path: '/',
 }
 
-export function signTokens(adminId: string, email: string, organizationId?: string) {
-  const payload = organizationId ? { adminId, email, organizationId } : { adminId, email }
+export function signTokens(adminId: string, email: string, organizationId?: string, emailVerified = false) {
+  const payload = { adminId, email, emailVerified, ...(organizationId ? { organizationId } : {}) }
   const accessToken = jwt.sign(payload, process.env.JWT_ACCESS_SECRET!, { expiresIn: '15m' })
   const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET!, { expiresIn: '7d' })
   return { accessToken, refreshToken }
