@@ -61,6 +61,9 @@ export function billingRoutes(
       })
 
       authed.post('/billing/checkout', async (request, reply) => {
+        if (!request.admin.emailVerified) {
+          return reply.code(403).send({ error: 'EMAIL_NOT_VERIFIED', message: 'Verifica tu correo electrónico para continuar' })
+        }
         const body = checkoutSchema.safeParse(request.body)
         if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
         reply.send(await createCheckout.run({
@@ -71,6 +74,9 @@ export function billingRoutes(
       })
 
       authed.post('/billing/buy-credits', async (request, reply) => {
+        if (!request.admin.emailVerified) {
+          return reply.code(403).send({ error: 'EMAIL_NOT_VERIFIED', message: 'Verifica tu correo electrónico para continuar' })
+        }
         const body = buyCreditsSchema.safeParse(request.body)
         if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
         reply.send(await buyCredits.run({
