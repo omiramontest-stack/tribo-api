@@ -15,7 +15,10 @@ declare module 'fastify' {
 }
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  const token = request.cookies.access_token
+  const token =
+    request.headers.authorization?.startsWith('Bearer ')
+      ? request.headers.authorization.slice(7)
+      : request.cookies.access_token
   if (!token) return reply.code(401).send({ error: 'Unauthorized' })
 
   try {

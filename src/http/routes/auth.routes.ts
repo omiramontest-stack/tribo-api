@@ -70,7 +70,7 @@ export function authRoutes(
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
         .code(201)
-        .send({ admin })
+        .send({ admin, accessToken })
     })
 
     app.post('/auth/onboarding', { preHandler: authenticate }, async (request, reply) => {
@@ -95,7 +95,7 @@ export function authRoutes(
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
-        .send({ ok: true })
+        .send({ ok: true, accessToken })
     })
 
     app.post('/auth/resend-verification', { preHandler: authenticate }, async (request, reply) => {
@@ -120,7 +120,7 @@ export function authRoutes(
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
-        .send({ ok: true })
+        .send({ ok: true, accessToken })
     })
 
     app.patch('/auth/password', { preHandler: authenticate }, async (request, reply) => {
@@ -141,7 +141,7 @@ export function authRoutes(
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
-        .send({ admin })
+        .send({ admin, accessToken })
     })
 
     app.post('/auth/switch-org', { preHandler: authenticate }, async (request, reply) => {
@@ -155,7 +155,7 @@ export function authRoutes(
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
-        .send({ ok: true })
+        .send({ ok: true, accessToken })
     })
 
     app.post('/auth/refresh', async (request, reply) => {
@@ -167,7 +167,7 @@ export function authRoutes(
         const { accessToken } = signTokens(payload.adminId, payload.email, payload.organizationId, payload.emailVerified ?? false)
         reply
           .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
-          .send({ ok: true })
+          .send({ ok: true, accessToken })
       } catch {
         reply.code(401).send({ error: 'Invalid refresh token' })
       }
