@@ -31,6 +31,34 @@ export async function sendVerificationEmail(opts: {
   })
 }
 
+export async function sendEmailChangeConfirmation(opts: {
+  to: string
+  confirmUrl: string
+}): Promise<void> {
+  if (!resend) {
+    console.log(`[EmailService] Email change confirmation to ${opts.to}: ${opts.confirmUrl}`)
+    return
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: 'Confirma tu nuevo correo electrónico',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+        <h2>Confirma tu nuevo correo</h2>
+        <p>Haz clic en el botón para confirmar este correo como el nuevo correo de tu cuenta.</p>
+        <p>
+          <a href="${opts.confirmUrl}" style="background:#000;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block">
+            Confirmar nuevo correo
+          </a>
+        </p>
+        <p style="color:#888;font-size:12px">Este enlace expira en 24 horas. Si no solicitaste este cambio, ignora este mensaje.</p>
+      </div>
+    `,
+  })
+}
+
 export async function sendInvitationEmail(opts: {
   to: string
   organizationName: string

@@ -46,4 +46,38 @@ export class AuthPrismaRepository implements AuthRepository {
     })
     return { id: updated.id, email: updated.email, emailVerified: updated.emailVerified }
   }
+
+  async getPasswordHash(adminId: string): Promise<string | null> {
+    const row = await this._db.admin.findUnique({ where: { id: adminId } })
+    return row?.passwordHash ?? null
+  }
+
+  async updatePassword(adminId: string, passwordHash: string): Promise<void> {
+    await this._db.admin.update({ where: { id: adminId }, data: { passwordHash } })
+  }
+
+  async requestEmailChange(adminId: string, pendingEmail: string, token: string, expiresAt: Date): Promise<void> {
+    await this._db.admin.update({
+      where: { id: adminId },
+      data: { pendingEmail, pendingEmailToken: token, pendingEmailTokenExpiresAt: expiresAt },
+    })
+  }
+
+  async confirmEmailChange(token: string): Promise<Admin | null> {
+    const row = await this._db.admin.findUnique({ where: { pendingEmailToken: token } })
+    if (!row || !row.pendingEmail) return null
+    if (!row.pendingEmailTokenExpiresAt || row.pendingEmailTokenExpiresAt < new Date()) return null
+
+    const updated = await this._db.admin.update({
+      where: { id: row.id },
+      data: {
+        email: row.pendingEmail,
+        emailVerified: true,
+        pendingEmail: null,
+        pendingEmailToken: null,
+        pendingEmailTokenExpiresAt: null,
+      },
+    })
+    return { id: updated.id, email: updated.email, emailVerified: updated.emailVerified }
+  }
 }

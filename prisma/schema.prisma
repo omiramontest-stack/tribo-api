@@ -14,6 +14,9 @@ model Admin {
   emailVerified                   Boolean              @default(false)
   emailVerificationToken          String?              @unique
   emailVerificationTokenExpiresAt DateTime?
+  pendingEmail                    String?
+  pendingEmailToken               String?              @unique
+  pendingEmailTokenExpiresAt      DateTime?
   createdAt                       DateTime             @default(now())
   deletedAt                       DateTime?
   memberships                     OrganizationMember[]

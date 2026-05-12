@@ -77,6 +77,33 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
     return row !== null
   }
 
+  async update(id: string, data: { name?: string; industry?: string | null; country?: string | null; phone?: string | null; logoUrl?: string | null }): Promise<Organization> {
+    const row = await this._db.organization.update({ where: { id }, data })
+    return this._toOrg(row)
+  }
+
+  async findMemberById(memberId: string): Promise<OrganizationMember | null> {
+    const row = await this._db.organizationMember.findUnique({
+      where: { id: memberId },
+      include: { admin: { select: { email: true } } },
+    })
+    if (!row) return null
+    return this._toMember({ ...row, email: row.admin.email })
+  }
+
+  async updateMemberRole(memberId: string, role: MemberRole): Promise<OrganizationMember> {
+    const row = await this._db.organizationMember.update({
+      where: { id: memberId },
+      data: { role },
+      include: { admin: { select: { email: true } } },
+    })
+    return this._toMember({ ...row, email: row.admin.email })
+  }
+
+  async removeMember(memberId: string): Promise<void> {
+    await this._db.organizationMember.delete({ where: { id: memberId } })
+  }
+
   private _toOrg(row: {
     id: string
     name: string

@@ -7,6 +7,9 @@ import type { GoogleAuthUseCase } from '../../application/auth/useCases/GoogleAu
 import type { OnboardingUseCase } from '../../application/auth/useCases/OnboardingUseCase.js'
 import type { SendVerificationEmailUseCase } from '../../application/auth/useCases/SendVerificationEmailUseCase.js'
 import type { VerifyEmailUseCase } from '../../application/auth/useCases/VerifyEmailUseCase.js'
+import type { RequestEmailChangeUseCase } from '../../application/auth/useCases/RequestEmailChangeUseCase.js'
+import type { ConfirmEmailChangeUseCase } from '../../application/auth/useCases/ConfirmEmailChangeUseCase.js'
+import type { ChangePasswordUseCase } from '../../application/auth/useCases/ChangePasswordUseCase.js'
 import type { OrganizationRepository } from '../../domain/organization/repository/OrganizationRepository.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { signTokens, COOKIE_OPTS } from '../utils/tokens.js'
@@ -34,6 +37,15 @@ const switchOrgSchema = z.object({
   organizationId: z.string().min(1),
 })
 
+const changeEmailSchema = z.object({
+  newEmail: z.string().email(),
+})
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+})
+
 export function authRoutes(
   loginUseCase: LoginUseCase,
   registerUseCase: RegisterUseCase,
@@ -42,6 +54,9 @@ export function authRoutes(
   orgRepository: OrganizationRepository,
   sendVerificationEmail: SendVerificationEmailUseCase,
   verifyEmail: VerifyEmailUseCase,
+  requestEmailChange: RequestEmailChangeUseCase,
+  confirmEmailChange: ConfirmEmailChangeUseCase,
+  changePassword: ChangePasswordUseCase,
 ) {
   return async (app: FastifyInstance) => {
     app.post('/auth/register', async (request, reply) => {
@@ -85,6 +100,34 @@ export function authRoutes(
 
     app.post('/auth/resend-verification', { preHandler: authenticate }, async (request, reply) => {
       await sendVerificationEmail.run({ adminId: request.admin.adminId, email: request.admin.email })
+      reply.send({ ok: true })
+    })
+
+    app.patch('/auth/email', { preHandler: authenticate }, async (request, reply) => {
+      const body = changeEmailSchema.safeParse(request.body)
+      if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
+
+      await requestEmailChange.run({ adminId: request.admin.adminId, newEmail: body.data.newEmail })
+      reply.send({ ok: true })
+    })
+
+    app.post('/auth/confirm-email-change/:token', async (request, reply) => {
+      const { token } = request.params as { token: string }
+
+      const admin = await confirmEmailChange.run(token)
+      const { accessToken, refreshToken } = signTokens(admin.id, admin.email, request.admin?.organizationId, true)
+
+      reply
+        .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
+        .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
+        .send({ ok: true })
+    })
+
+    app.patch('/auth/password', { preHandler: authenticate }, async (request, reply) => {
+      const body = changePasswordSchema.safeParse(request.body)
+      if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
+
+      await changePassword.run({ adminId: request.admin.adminId, ...body.data })
       reply.send({ ok: true })
     })
 

@@ -7,4 +7,8 @@ export interface AuthRepository {
   create(data: { email: string; passwordHash?: string; googleId?: string; emailVerified?: boolean }): Promise<Admin>
   setVerificationToken(adminId: string, token: string, expiresAt: Date): Promise<void>
   verifyEmail(token: string): Promise<Admin | null>
+  getPasswordHash(adminId: string): Promise<string | null>
+  updatePassword(adminId: string, passwordHash: string): Promise<void>
+  requestEmailChange(adminId: string, pendingEmail: string, token: string, expiresAt: Date): Promise<void>
+  confirmEmailChange(token: string): Promise<Admin | null>
 }

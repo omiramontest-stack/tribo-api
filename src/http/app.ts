@@ -18,6 +18,9 @@ import { GoogleAuthUseCase } from '../application/auth/useCases/GoogleAuthUseCas
 import { OnboardingUseCase } from '../application/auth/useCases/OnboardingUseCase.js'
 import { SendVerificationEmailUseCase } from '../application/auth/useCases/SendVerificationEmailUseCase.js'
 import { VerifyEmailUseCase } from '../application/auth/useCases/VerifyEmailUseCase.js'
+import { RequestEmailChangeUseCase } from '../application/auth/useCases/RequestEmailChangeUseCase.js'
+import { ConfirmEmailChangeUseCase } from '../application/auth/useCases/ConfirmEmailChangeUseCase.js'
+import { ChangePasswordUseCase } from '../application/auth/useCases/ChangePasswordUseCase.js'
 
 // Use cases — organization
 import { GetMyOrganizationsUseCase } from '../application/organization/useCases/GetMyOrganizationsUseCase.js'
@@ -25,6 +28,9 @@ import { GetMembersUseCase } from '../application/organization/useCases/GetMembe
 import { InviteUserUseCase } from '../application/organization/useCases/InviteUserUseCase.js'
 import { GetInvitationUseCase } from '../application/organization/useCases/GetInvitationUseCase.js'
 import { AcceptInvitationUseCase } from '../application/organization/useCases/AcceptInvitationUseCase.js'
+import { UpdateOrganizationUseCase } from '../application/organization/useCases/UpdateOrganizationUseCase.js'
+import { UpdateMemberRoleUseCase } from '../application/organization/useCases/UpdateMemberRoleUseCase.js'
+import { RemoveMemberUseCase } from '../application/organization/useCases/RemoveMemberUseCase.js'
 
 // Use cases — wallet
 import { CreateWalletUseCase } from '../application/wallet/useCases/CreateWalletUseCase.js'
@@ -124,6 +130,9 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const onboardingUseCase = new OnboardingUseCase(orgRepo, createTrial, prisma)
   const sendVerificationEmail = new SendVerificationEmailUseCase(authRepo)
   const verifyEmail = new VerifyEmailUseCase(authRepo)
+  const requestEmailChange = new RequestEmailChangeUseCase(authRepo)
+  const confirmEmailChange = new ConfirmEmailChangeUseCase(authRepo)
+  const changePassword = new ChangePasswordUseCase(authRepo)
 
   // Organization use cases
   const getMyOrganizations = new GetMyOrganizationsUseCase(orgRepo)
@@ -131,6 +140,9 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const inviteUser = new InviteUserUseCase(orgRepo, invitationRepo)
   const getInvitation = new GetInvitationUseCase(invitationRepo, orgRepo)
   const acceptInvitation = new AcceptInvitationUseCase(invitationRepo, orgRepo, authRepo, getInvitation)
+  const updateOrganization = new UpdateOrganizationUseCase(orgRepo)
+  const updateMemberRole = new UpdateMemberRoleUseCase(orgRepo)
+  const removeMember = new RemoveMemberUseCase(orgRepo)
 
   // Wallet use cases
   const createWallet = new CreateWalletUseCase(walletRepo, orgRepo)
@@ -185,8 +197,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const planGuard = createPlanGuard(billingRepo)
 
   // Routes
-  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail))
-  app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation))
+  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword))
+  app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard))
   app.register(appleRoutes(prisma, passRepo, walletRepo, validateDownloadToken, redeemDownloadToken))
