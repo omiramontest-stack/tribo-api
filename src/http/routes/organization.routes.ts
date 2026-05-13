@@ -109,7 +109,7 @@ export function organizationRoutes(
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
-        .send({ admin })
+        .send({ admin, accessToken })
     })
   }
 }

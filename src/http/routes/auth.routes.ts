@@ -13,8 +13,10 @@ import type { ChangePasswordUseCase } from '../../application/auth/useCases/Chan
 import type { RequestPasswordResetUseCase } from '../../application/auth/useCases/RequestPasswordResetUseCase.js'
 import type { ResetPasswordUseCase } from '../../application/auth/useCases/ResetPasswordUseCase.js'
 import type { OrganizationRepository } from '../../domain/organization/repository/OrganizationRepository.js'
+import type { AuthRepository } from '../../domain/auth/repository/AuthRepository.js'
 import { authenticate } from '../middlewares/authenticate.js'
-import { signTokens, COOKIE_OPTS } from '../utils/tokens.js'
+import { signTokens, COOKIE_OPTS, hashToken } from '../utils/tokens.js'
+import { loginRateLimit, forgotPasswordRateLimit } from '../plugins/rateLimit.js'
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -33,7 +35,6 @@ const onboardingSchema = z.object({
   phone: z.string().optional(),
   logoUrl: z.string().url().optional(),
 })
-
 
 const switchOrgSchema = z.object({
   organizationId: z.string().min(1),
@@ -69,6 +70,7 @@ export function authRoutes(
   changePassword: ChangePasswordUseCase,
   requestPasswordReset: RequestPasswordResetUseCase,
   resetPassword: ResetPasswordUseCase,
+  authRepository: AuthRepository,
 ) {
   return async (app: FastifyInstance) => {
     app.post('/auth/register', async (request, reply) => {
@@ -77,6 +79,7 @@ export function authRoutes(
 
       const admin = await registerUseCase.run(body.data)
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
+      await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
@@ -103,6 +106,7 @@ export function authRoutes(
 
       const admin = await verifyEmail.run(token)
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, request.admin?.organizationId, true)
+      await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
@@ -128,6 +132,7 @@ export function authRoutes(
 
       const admin = await confirmEmailChange.run(token)
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, request.admin?.organizationId, true)
+      await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
@@ -140,15 +145,18 @@ export function authRoutes(
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
       await changePassword.run({ adminId: request.admin.adminId, ...body.data })
+      // Invalidar sesión activa al cambiar contraseña
+      await authRepository.setRefreshTokenHash(request.admin.adminId, null)
       reply.send({ ok: true })
     })
 
-    app.post('/auth/login', async (request, reply) => {
+    app.post('/auth/login', { ...loginRateLimit }, async (request, reply) => {
       const body = loginSchema.safeParse(request.body)
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
       const admin = await loginUseCase.run(body.data)
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
+      await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
@@ -164,6 +172,8 @@ export function authRoutes(
       if (!isMember) return reply.code(403).send({ error: 'Forbidden' })
 
       const { accessToken, refreshToken } = signTokens(request.admin.adminId, request.admin.email, body.data.organizationId, request.admin.emailVerified)
+      await authRepository.setRefreshTokenHash(request.admin.adminId, hashToken(refreshToken))
+
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
@@ -176,16 +186,25 @@ export function authRoutes(
 
       try {
         const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET!) as { adminId: string; email: string; organizationId?: string; emailVerified?: boolean }
-        const { accessToken } = signTokens(payload.adminId, payload.email, payload.organizationId, payload.emailVerified ?? false)
+
+        const storedHash = await authRepository.getRefreshTokenHash(payload.adminId)
+        if (!storedHash || storedHash !== hashToken(token)) {
+          return reply.code(401).send({ error: 'Invalid refresh token' })
+        }
+
+        const { accessToken, refreshToken: newRefreshToken } = signTokens(payload.adminId, payload.email, payload.organizationId, payload.emailVerified ?? false)
+        await authRepository.setRefreshTokenHash(payload.adminId, hashToken(newRefreshToken))
+
         reply
           .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
+          .setCookie('refresh_token', newRefreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
           .send({ ok: true, accessToken })
       } catch {
         reply.code(401).send({ error: 'Invalid refresh token' })
       }
     })
 
-    app.post('/auth/forgot-password', async (request, reply) => {
+    app.post('/auth/forgot-password', { ...forgotPasswordRateLimit }, async (request, reply) => {
       const body = forgotPasswordSchema.safeParse(request.body)
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
@@ -198,11 +217,14 @@ export function authRoutes(
       const body = resetPasswordSchema.safeParse(request.body)
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
-      await resetPassword.run({ token, newPassword: body.data.newPassword })
+      const admin = await resetPassword.run({ token, newPassword: body.data.newPassword })
+      // Invalidar cualquier sesión activa al resetear contraseña
+      await authRepository.setRefreshTokenHash(admin.id, null)
       reply.send({ ok: true })
     })
 
-    app.post('/auth/logout', { preHandler: authenticate }, async (_request, reply) => {
+    app.post('/auth/logout', { preHandler: authenticate }, async (request, reply) => {
+      await authRepository.setRefreshTokenHash(request.admin.adminId, null)
       reply
         .clearCookie('access_token', { ...COOKIE_OPTS, maxAge: 0 })
         .clearCookie('refresh_token', { ...COOKIE_OPTS, maxAge: 0 })
@@ -256,6 +278,7 @@ export function authRoutes(
       })
 
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
+      await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
 
       const clientUrl = (process.env.CLIENT_URL ?? 'http://localhost:5173').split(',')[0].trim()
 

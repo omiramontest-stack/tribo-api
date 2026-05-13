@@ -6,11 +6,7 @@ import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCas
 import type { RedeemDownloadTokenUseCase } from '../../application/pass/useCases/RedeemDownloadTokenUseCase.js'
 import { generatePkPass } from '../../infrastructure/apple/AppleWalletService.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
-import { isValidAdminCookie } from '../middlewares/authenticate.js'
-
-function isAdminRequest(request: { cookies?: { access_token?: string } }): boolean {
-  return isValidAdminCookie(request.cookies)
-}
+import { isValidAdminRequest } from '../middlewares/authenticate.js'
 
 export function appleRoutes(
   db: PrismaClient,
@@ -26,7 +22,7 @@ export function appleRoutes(
       const { token } = request.params as { token: string }
       const dlToken = (request.query as { dl?: string }).dl
 
-      if (!isAdminRequest(request)) {
+      if (!isValidAdminRequest(request)) {
         if (!dlToken) return reply.code(401).send({ error: 'UNAUTHORIZED' })
         await validateDownloadToken.run(dlToken)
       }
@@ -51,7 +47,7 @@ export function appleRoutes(
       const { token } = request.params as { token: string }
       const dlToken = (request.query as { dl?: string }).dl
 
-      if (!isAdminRequest(request)) {
+      if (!isValidAdminRequest(request)) {
         if (!dlToken) return reply.code(401).send({ error: 'UNAUTHORIZED' })
         await validateDownloadToken.run(dlToken)
       }

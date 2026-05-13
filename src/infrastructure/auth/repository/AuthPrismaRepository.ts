@@ -81,6 +81,15 @@ export class AuthPrismaRepository implements AuthRepository {
     return { id: updated.id, email: updated.email, emailVerified: updated.emailVerified }
   }
 
+  async getRefreshTokenHash(adminId: string): Promise<string | null> {
+    const row = await this._db.admin.findUnique({ where: { id: adminId }, select: { refreshTokenHash: true } })
+    return row?.refreshTokenHash ?? null
+  }
+
+  async setRefreshTokenHash(adminId: string, hash: string | null): Promise<void> {
+    await this._db.admin.update({ where: { id: adminId }, data: { refreshTokenHash: hash } })
+  }
+
   async setPasswordResetToken(adminId: string, token: string, expiresAt: Date): Promise<void> {
     await this._db.admin.update({
       where: { id: adminId },

@@ -98,6 +98,7 @@ import { createPlanGuard } from './middlewares/checkPlan.js'
 // Plugins & routes
 import cookiesPlugin from './plugins/cookies.js'
 import corsPlugin from './plugins/cors.js'
+import rateLimitPlugin from './plugins/rateLimit.js'
 import { authRoutes } from './routes/auth.routes.js'
 import { organizationRoutes } from './routes/organization.routes.js'
 import { walletRoutes } from './routes/wallet.routes.js'
@@ -110,6 +111,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
 
   await app.register(cookiesPlugin)
   await app.register(corsPlugin)
+  await app.register(rateLimitPlugin)
 
   // Repositories
   const walletRepo = new WalletPrismaRepository(prisma)
@@ -201,7 +203,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const planGuard = createPlanGuard(billingRepo)
 
   // Routes
-  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword))
+  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard))

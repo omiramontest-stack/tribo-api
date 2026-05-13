@@ -10,7 +10,7 @@ import type { GetCashbackTransactionsUseCase } from '../../application/cashback/
 import type { GetScannedDaypassesUseCase } from '../../application/pass/useCases/GetScannedDaypassesUseCase.js'
 import type { SendPassLinkUseCase } from '../../application/pass/useCases/SendPassLinkUseCase.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
-import { authenticate, requireOrgContext, isValidAdminCookie } from '../middlewares/authenticate.js'
+import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
@@ -68,7 +68,7 @@ export function passRoutes(
         return reply.send({ ...pass, dlExpiresAt: expiresAt })
       }
 
-      if (!isValidAdminCookie(request.cookies)) return reply.code(401).send({ error: 'UNAUTHORIZED' })
+      if (!isValidAdminRequest(request)) return reply.code(401).send({ error: 'UNAUTHORIZED' })
 
       reply.send(await getPassByToken.run(token))
     })

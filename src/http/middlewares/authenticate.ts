@@ -29,8 +29,11 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   }
 }
 
-export function isValidAdminCookie(cookies?: { access_token?: string }): boolean {
-  const token = cookies?.access_token
+export function isValidAdminRequest(request: { cookies?: { access_token?: string }; headers?: { authorization?: string } }): boolean {
+  const token =
+    request.headers?.authorization?.startsWith('Bearer ')
+      ? request.headers.authorization.slice(7)
+      : request.cookies?.access_token
   if (!token) return false
   try {
     jwt.verify(token, process.env.JWT_ACCESS_SECRET!)

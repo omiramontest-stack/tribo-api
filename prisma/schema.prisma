@@ -19,6 +19,7 @@ model Admin {
   pendingEmailTokenExpiresAt      DateTime?
   passwordResetToken              String?              @unique
   passwordResetTokenExpiresAt     DateTime?
+  refreshTokenHash                String?
   createdAt                       DateTime             @default(now())
   deletedAt                       DateTime?
   memberships                     OrganizationMember[]

@@ -14,4 +14,6 @@ export interface AuthRepository {
   setPasswordResetToken(adminId: string, token: string, expiresAt: Date): Promise<void>
   findByResetToken(token: string): Promise<Admin | null>
   resetPassword(token: string, passwordHash: string): Promise<Admin | null>
+  getRefreshTokenHash(adminId: string): Promise<string | null>
+  setRefreshTokenHash(adminId: string, hash: string | null): Promise<void>
 }
