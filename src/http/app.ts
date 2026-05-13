@@ -21,6 +21,8 @@ import { VerifyEmailUseCase } from '../application/auth/useCases/VerifyEmailUseC
 import { RequestEmailChangeUseCase } from '../application/auth/useCases/RequestEmailChangeUseCase.js'
 import { ConfirmEmailChangeUseCase } from '../application/auth/useCases/ConfirmEmailChangeUseCase.js'
 import { ChangePasswordUseCase } from '../application/auth/useCases/ChangePasswordUseCase.js'
+import { RequestPasswordResetUseCase } from '../application/auth/useCases/RequestPasswordResetUseCase.js'
+import { ResetPasswordUseCase } from '../application/auth/useCases/ResetPasswordUseCase.js'
 
 // Use cases — organization
 import { GetMyOrganizationsUseCase } from '../application/organization/useCases/GetMyOrganizationsUseCase.js'
@@ -133,6 +135,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const requestEmailChange = new RequestEmailChangeUseCase(authRepo)
   const confirmEmailChange = new ConfirmEmailChangeUseCase(authRepo)
   const changePassword = new ChangePasswordUseCase(authRepo)
+  const requestPasswordReset = new RequestPasswordResetUseCase(authRepo)
+  const resetPassword = new ResetPasswordUseCase(authRepo)
 
   // Organization use cases
   const getMyOrganizations = new GetMyOrganizationsUseCase(orgRepo)
@@ -197,7 +201,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const planGuard = createPlanGuard(billingRepo)
 
   // Routes
-  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword))
+  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard))

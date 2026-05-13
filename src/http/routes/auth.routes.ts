@@ -10,6 +10,8 @@ import type { VerifyEmailUseCase } from '../../application/auth/useCases/VerifyE
 import type { RequestEmailChangeUseCase } from '../../application/auth/useCases/RequestEmailChangeUseCase.js'
 import type { ConfirmEmailChangeUseCase } from '../../application/auth/useCases/ConfirmEmailChangeUseCase.js'
 import type { ChangePasswordUseCase } from '../../application/auth/useCases/ChangePasswordUseCase.js'
+import type { RequestPasswordResetUseCase } from '../../application/auth/useCases/RequestPasswordResetUseCase.js'
+import type { ResetPasswordUseCase } from '../../application/auth/useCases/ResetPasswordUseCase.js'
 import type { OrganizationRepository } from '../../domain/organization/repository/OrganizationRepository.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { signTokens, COOKIE_OPTS } from '../utils/tokens.js'
@@ -46,6 +48,14 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8),
 })
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+})
+
+const resetPasswordSchema = z.object({
+  newPassword: z.string().min(8),
+})
+
 export function authRoutes(
   loginUseCase: LoginUseCase,
   registerUseCase: RegisterUseCase,
@@ -57,6 +67,8 @@ export function authRoutes(
   requestEmailChange: RequestEmailChangeUseCase,
   confirmEmailChange: ConfirmEmailChangeUseCase,
   changePassword: ChangePasswordUseCase,
+  requestPasswordReset: RequestPasswordResetUseCase,
+  resetPassword: ResetPasswordUseCase,
 ) {
   return async (app: FastifyInstance) => {
     app.post('/auth/register', async (request, reply) => {
@@ -171,6 +183,23 @@ export function authRoutes(
       } catch {
         reply.code(401).send({ error: 'Invalid refresh token' })
       }
+    })
+
+    app.post('/auth/forgot-password', async (request, reply) => {
+      const body = forgotPasswordSchema.safeParse(request.body)
+      if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
+
+      await requestPasswordReset.run({ email: body.data.email })
+      reply.send({ ok: true })
+    })
+
+    app.post('/auth/reset-password/:token', async (request, reply) => {
+      const { token } = request.params as { token: string }
+      const body = resetPasswordSchema.safeParse(request.body)
+      if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
+
+      await resetPassword.run({ token, newPassword: body.data.newPassword })
+      reply.send({ ok: true })
     })
 
     app.post('/auth/logout', { preHandler: authenticate }, async (_request, reply) => {

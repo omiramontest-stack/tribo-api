@@ -80,4 +80,30 @@ export class AuthPrismaRepository implements AuthRepository {
     })
     return { id: updated.id, email: updated.email, emailVerified: updated.emailVerified }
   }
+
+  async setPasswordResetToken(adminId: string, token: string, expiresAt: Date): Promise<void> {
+    await this._db.admin.update({
+      where: { id: adminId },
+      data: { passwordResetToken: token, passwordResetTokenExpiresAt: expiresAt },
+    })
+  }
+
+  async findByResetToken(token: string): Promise<Admin | null> {
+    const row = await this._db.admin.findUnique({ where: { passwordResetToken: token } })
+    if (!row) return null
+    if (!row.passwordResetTokenExpiresAt || row.passwordResetTokenExpiresAt < new Date()) return null
+    return { id: row.id, email: row.email, emailVerified: row.emailVerified }
+  }
+
+  async resetPassword(token: string, passwordHash: string): Promise<Admin | null> {
+    const row = await this._db.admin.findUnique({ where: { passwordResetToken: token } })
+    if (!row) return null
+    if (!row.passwordResetTokenExpiresAt || row.passwordResetTokenExpiresAt < new Date()) return null
+
+    const updated = await this._db.admin.update({
+      where: { id: row.id },
+      data: { passwordHash, passwordResetToken: null, passwordResetTokenExpiresAt: null },
+    })
+    return { id: updated.id, email: updated.email, emailVerified: updated.emailVerified }
+  }
 }

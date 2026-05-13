@@ -59,6 +59,34 @@ export async function sendEmailChangeConfirmation(opts: {
   })
 }
 
+export async function sendPasswordResetEmail(opts: {
+  to: string
+  resetUrl: string
+}): Promise<void> {
+  if (!resend) {
+    console.log(`[EmailService] Password reset email to ${opts.to}: ${opts.resetUrl}`)
+    return
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: 'Restablecer contraseña',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+        <h2>Restablecer contraseña</h2>
+        <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+        <p>
+          <a href="${opts.resetUrl}" style="background:#000;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block">
+            Restablecer contraseña
+          </a>
+        </p>
+        <p style="color:#888;font-size:12px">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este mensaje.</p>
+      </div>
+    `,
+  })
+}
+
 export async function sendInvitationEmail(opts: {
   to: string
   organizationName: string

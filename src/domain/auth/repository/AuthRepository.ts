@@ -11,4 +11,7 @@ export interface AuthRepository {
   updatePassword(adminId: string, passwordHash: string): Promise<void>
   requestEmailChange(adminId: string, pendingEmail: string, token: string, expiresAt: Date): Promise<void>
   confirmEmailChange(token: string): Promise<Admin | null>
+  setPasswordResetToken(adminId: string, token: string, expiresAt: Date): Promise<void>
+  findByResetToken(token: string): Promise<Admin | null>
+  resetPassword(token: string, passwordHash: string): Promise<Admin | null>
 }
