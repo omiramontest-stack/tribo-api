@@ -32,19 +32,30 @@ enum MemberRole {
 }
 
 model Organization {
-  id        String               @id @default(cuid())
-  name      String
-  logoUrl   String?
-  industry  String?
-  country   String?
-  phone     String?
-  createdAt DateTime             @default(now())
-  deletedAt DateTime?
-  members      OrganizationMember[]
-  wallets      Wallet[]
-  invitations  Invitation[]
-  subscription Subscription?
-  smsCredit    SmsCredit?
+  id                       String               @id @default(cuid())
+  name                     String
+  logoUrl                  String?
+  industry                 String?
+  country                  String?
+  phone                    String?
+  whatsappMessageTemplate  String?
+  createdAt                DateTime             @default(now())
+  deletedAt                DateTime?
+  members           OrganizationMember[]
+  wallets           Wallet[]
+  invitations       Invitation[]
+  subscription      Subscription?
+  smsCredit         SmsCredit?
+  whatsappSession   WhatsAppSession?
+}
+
+model WhatsAppSession {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  phone          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model OrganizationMember {

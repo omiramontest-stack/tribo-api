@@ -77,7 +77,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
     return row !== null
   }
 
-  async update(id: string, data: { name?: string; industry?: string | null; country?: string | null; phone?: string | null; logoUrl?: string | null }): Promise<Organization> {
+  async update(id: string, data: { name?: string; industry?: string | null; country?: string | null; phone?: string | null; logoUrl?: string | null; whatsappMessageTemplate?: string | null }): Promise<Organization> {
     const row = await this._db.organization.update({ where: { id }, data })
     return this._toOrg(row)
   }
@@ -111,6 +111,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
     industry: string | null
     country: string | null
     phone: string | null
+    whatsappMessageTemplate?: string | null
     createdAt: Date
   }): Organization {
     return {
@@ -120,6 +121,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
       industry: row.industry,
       country: row.country,
       phone: row.phone,
+      whatsappMessageTemplate: row.whatsappMessageTemplate ?? null,
       createdAt: row.createdAt.toISOString(),
     }
   }

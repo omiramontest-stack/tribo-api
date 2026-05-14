@@ -9,6 +9,7 @@ import type { ScanDaypassUseCase } from '../../application/pass/useCases/ScanDay
 import type { GetCashbackTransactionsUseCase } from '../../application/cashback/useCases/GetCashbackTransactionsUseCase.js'
 import type { GetScannedDaypassesUseCase } from '../../application/pass/useCases/GetScannedDaypassesUseCase.js'
 import type { SendPassLinkUseCase } from '../../application/pass/useCases/SendPassLinkUseCase.js'
+import type { SendPassWhatsAppUseCase } from '../../application/pass/useCases/SendPassWhatsAppUseCase.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
@@ -43,6 +44,7 @@ export function passRoutes(
   validateDownloadToken: ValidateDownloadTokenUseCase,
   passRepo: PassRepository,
   planGuard: PlanGuard,
+  sendPassWhatsApp: SendPassWhatsAppUseCase,
 ) {
   return async (app: FastifyInstance) => {
     // Public — validate short link, redirect to frontend with dl token as query param
@@ -136,6 +138,16 @@ export function passRoutes(
     app.post('/passes/:token/send-link', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { token } = request.params as { token: string }
       await sendPassLink.run({ token, adminId: request.admin.adminId, organizationId: request.admin.organizationId! })
+      reply.send({ ok: true })
+    })
+
+    app.post('/passes/:token/send-whatsapp', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
+      const { token } = request.params as { token: string }
+      await sendPassWhatsApp.run({
+        token,
+        adminId: request.admin.adminId,
+        organizationId: request.admin.organizationId!,
+      })
       reply.send({ ok: true })
     })
 

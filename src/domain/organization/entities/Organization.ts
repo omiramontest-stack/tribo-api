@@ -5,5 +5,6 @@ export interface Organization {
   industry: string | null
   country: string | null
   phone: string | null
+  whatsappMessageTemplate: string | null
   createdAt: string
 }

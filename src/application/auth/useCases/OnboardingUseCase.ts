@@ -87,6 +87,7 @@ export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
       industry: orgRow.industry,
       country: orgRow.country,
       phone: orgRow.phone,
+      whatsappMessageTemplate: null,
       createdAt: orgRow.createdAt.toISOString(),
     }
   }

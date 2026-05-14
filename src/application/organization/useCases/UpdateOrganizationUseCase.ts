@@ -11,6 +11,7 @@ export interface UpdateOrganizationDto {
   country?: string | null
   phone?: string | null
   logoUrl?: string | null
+  whatsappMessageTemplate?: string | null
 }
 
 export class UpdateOrganizationUseCase implements UseCase<UpdateOrganizationDto, Organization> {

@@ -26,6 +26,7 @@ const updateOrgSchema = z.object({
   country: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   logoUrl: z.string().url().nullable().optional(),
+  whatsappMessageTemplate: z.string().max(500).nullable().optional(),
 })
 
 const updateMemberRoleSchema = z.object({

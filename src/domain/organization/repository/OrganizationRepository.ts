@@ -3,7 +3,7 @@ import type { OrganizationMember, MemberRole } from '../entities/OrganizationMem
 
 export interface OrganizationRepository {
   save(org: Organization): Promise<Organization>
-  update(id: string, data: { name?: string; industry?: string | null; country?: string | null; phone?: string | null; logoUrl?: string | null }): Promise<Organization>
+  update(id: string, data: { name?: string; industry?: string | null; country?: string | null; phone?: string | null; logoUrl?: string | null; whatsappMessageTemplate?: string | null }): Promise<Organization>
   findById(id: string): Promise<Organization | null>
   findByAdminId(adminId: string): Promise<Organization[]>
   addMember(member: OrganizationMember): Promise<OrganizationMember>

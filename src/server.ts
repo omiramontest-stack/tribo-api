@@ -1,9 +1,11 @@
 import 'dotenv/config'
 import { buildApp } from './http/app.js'
 
-const { app, worker } = await buildApp()
+const { app, worker, whatsappManager } = await buildApp()
 
 worker.start()
+// Restore WhatsApp sessions that were connected before the last restart
+whatsappManager.restoreAll().catch(err => console.error('[WhatsApp] Failed to restore sessions:', err))
 
 const shutdown = async () => {
   worker.stop()

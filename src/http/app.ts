@@ -49,6 +49,9 @@ import { DeletePassUseCase } from '../application/pass/useCases/DeletePassUseCas
 import { ScanDaypassUseCase } from '../application/pass/useCases/ScanDaypassUseCase.js'
 import { GetScannedDaypassesUseCase } from '../application/pass/useCases/GetScannedDaypassesUseCase.js'
 import { SendPassLinkUseCase } from '../application/pass/useCases/SendPassLinkUseCase.js'
+import { SendPassWhatsAppUseCase } from '../application/pass/useCases/SendPassWhatsAppUseCase.js'
+import { WhatsAppSessionManager } from '../infrastructure/whatsapp/WhatsAppSessionManager.js'
+import { whatsappRoutes } from './routes/whatsapp.routes.js'
 import { RedeemDownloadTokenUseCase } from '../application/pass/useCases/RedeemDownloadTokenUseCase.js'
 import { ValidateDownloadTokenUseCase } from '../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 
@@ -106,7 +109,7 @@ import { passRoutes } from './routes/pass.routes.js'
 import { appleRoutes } from './routes/apple.routes.js'
 import { analyticsRoutes } from './routes/analytics.routes.js'
 
-export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorker }> {
+export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorker; whatsappManager: WhatsAppSessionManager }> {
   const app = Fastify({ logger: true })
 
   await app.register(cookiesPlugin)
@@ -165,6 +168,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const scanDaypass = new ScanDaypassUseCase(passRepo, walletRepo, passEventRepo)
   const getScannedDaypasses = new GetScannedDaypassesUseCase(passRepo, walletRepo, orgRepo)
   const sendPassLink = new SendPassLinkUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo)
+  const whatsappManager = new WhatsAppSessionManager(prisma)
+  const sendPassWhatsApp = new SendPassWhatsAppUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo, whatsappManager)
   const redeemDownloadToken = new RedeemDownloadTokenUseCase(passDownloadTokenRepo)
   const validateDownloadToken = new ValidateDownloadTokenUseCase(passDownloadTokenRepo)
 
@@ -206,7 +211,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
-  app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard))
+  app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp))
+  app.register(whatsappRoutes(whatsappManager, orgRepo))
   app.register(appleRoutes(prisma, passRepo, walletRepo, validateDownloadToken, redeemDownloadToken))
   app.register(analyticsRoutes(getOrgAnalytics, getWalletAnalytics))
   app.register(campaignRoutes(createCampaign, previewAudience, scheduleCampaign, cancelCampaign, getCampaigns, getCampaignById, getCampaignStats, planGuard))
@@ -224,5 +230,5 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
     reply.code(500).send({ error: 'INTERNAL_ERROR', message: 'Internal server error' })
   })
 
-  return { app, worker }
+  return { app, worker, whatsappManager }
 }
