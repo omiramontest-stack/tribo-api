@@ -9,11 +9,14 @@ import type { PrismaClient } from '@prisma/client'
 
 export type WhatsAppStatus = 'disconnected' | 'qr_pending' | 'connected'
 
+const SEND_COOLDOWN_MS = 5_000
+
 interface SessionEntry {
   sock: WASocket
   status: WhatsAppStatus
   qr: string | null
   phone: string | null
+  lastSentAt: number
 }
 
 const SESSIONS_DIR = process.env.WHATSAPP_SESSIONS_DIR ?? './whatsapp-sessions'
@@ -68,6 +71,11 @@ export class WhatsAppSessionManager {
     if (!entry || entry.status !== 'connected') {
       throw new Error('WhatsApp not connected for this organization')
     }
+    const now = Date.now()
+    if (now - entry.lastSentAt < SEND_COOLDOWN_MS) {
+      throw new Error(`WhatsApp: wait ${SEND_COOLDOWN_MS / 1000}s between sends`)
+    }
+    entry.lastSentAt = now
     // wa.me phone format → JID: digits only + @s.whatsapp.net
     const jid = `${to.replace(/\D/g, '')}@s.whatsapp.net`
     await entry.sock.sendMessage(jid, { text })
@@ -86,7 +94,7 @@ export class WhatsAppSessionManager {
       logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({ level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({} as any) }) } as any,
     })
 
-    const entry: SessionEntry = { sock, status: 'qr_pending', qr: null, phone: null }
+    const entry: SessionEntry = { sock, status: 'qr_pending', qr: null, phone: null, lastSentAt: 0 }
     this._sessions.set(orgId, entry)
 
     sock.ev.on('connection.update', async ({ qr, connection, lastDisconnect }) => {
