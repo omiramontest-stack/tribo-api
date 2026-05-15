@@ -1,6 +1,9 @@
 import path from 'path'
-import { Client, LocalAuth } from 'whatsapp-web.js'
+import pkg from 'whatsapp-web.js'
+import type { Client as ClientType } from 'whatsapp-web.js'
 import type { PrismaClient } from '@prisma/client'
+
+const { Client, LocalAuth } = pkg
 
 // Returns last 4 digits only — enough for debugging, not enough to identify
 function maskPhone(phone: string): string {
@@ -16,7 +19,7 @@ const QR_SESSION_TIMEOUT_MS = 5 * 60 * 1000
 const SESSIONS_DIR = process.env.WHATSAPP_SESSIONS_DIR ?? './whatsapp-sessions'
 
 interface SessionEntry {
-  client: Client
+  client: ClientType
   status: WhatsAppStatus
   qr: string | null
   phone: string | null
