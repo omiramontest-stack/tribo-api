@@ -1,5 +1,8 @@
 import 'dotenv/config'
+import { validateEnv } from './config/env.js'
 import { buildApp } from './http/app.js'
+
+validateEnv()
 
 const { app, worker, whatsappManager } = await buildApp()
 
@@ -9,6 +12,7 @@ whatsappManager.restoreAll().catch(err => console.error('[WhatsApp] Failed to re
 
 const shutdown = async () => {
   worker.stop()
+  await whatsappManager.destroyAll()
   await app.close()
   process.exit(0)
 }

@@ -13,6 +13,7 @@ import type { SendPassWhatsAppUseCase } from '../../application/pass/useCases/Se
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
+import { sendWhatsAppRateLimit } from '../plugins/rateLimit.js'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
 
@@ -141,7 +142,7 @@ export function passRoutes(
       reply.send({ ok: true })
     })
 
-    app.post('/passes/:token/send-whatsapp', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
+    app.post('/passes/:token/send-whatsapp', { ...sendWhatsAppRateLimit, preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { token } = request.params as { token: string }
       await sendPassWhatsApp.run({
         token,

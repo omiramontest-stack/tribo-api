@@ -1,29 +1,27 @@
-import { existsSync, mkdirSync, rmSync } from 'fs'
 import path from 'path'
-import pino from 'pino'
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  type WASocket,
-} from '@whiskeysockets/baileys'
+import { Client, LocalAuth } from 'whatsapp-web.js'
 import type { PrismaClient } from '@prisma/client'
+
+// Returns last 4 digits only — enough for debugging, not enough to identify
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  return `***${digits.slice(-4)}`
+}
 
 export type WhatsAppStatus = 'disconnected' | 'qr_pending' | 'connected'
 
 const SEND_COOLDOWN_MS = 5_000
+// Auto-destroy the client if QR is not scanned within this time
+const QR_SESSION_TIMEOUT_MS = 5 * 60 * 1000
+const SESSIONS_DIR = process.env.WHATSAPP_SESSIONS_DIR ?? './whatsapp-sessions'
 
 interface SessionEntry {
-  sock: WASocket
+  client: Client
   status: WhatsAppStatus
   qr: string | null
   phone: string | null
   lastSentAt: number
-}
-
-const SESSIONS_DIR = process.env.WHATSAPP_SESSIONS_DIR ?? './whatsapp-sessions'
-
-function sessionDir(orgId: string): string {
-  return path.join(SESSIONS_DIR, orgId)
+  qrTimer: ReturnType<typeof setTimeout> | null
 }
 
 export class WhatsAppSessionManager {
@@ -31,10 +29,19 @@ export class WhatsAppSessionManager {
 
   constructor(private readonly _db: PrismaClient) {}
 
-  // Called once on server startup to restore existing sessions
   async restoreAll(): Promise<void> {
     const rows = await this._db.whatsAppSession.findMany()
-    await Promise.all(rows.map(r => this._connect(r.organizationId).catch(() => {})))
+    // Restore sequentially to avoid spawning all Chrome instances at once
+    for (const row of rows) {
+      await this._connect(row.organizationId).catch(err =>
+        console.error(`[WhatsApp] restore failed org=${row.organizationId}`, err),
+      )
+    }
+  }
+
+  async destroyAll(): Promise<void> {
+    const orgIds = [...this._sessions.keys()]
+    await Promise.all(orgIds.map(id => this._destroyEntry(id)))
   }
 
   getStatus(orgId: string): WhatsAppStatus {
@@ -58,12 +65,9 @@ export class WhatsAppSessionManager {
   async disconnect(orgId: string): Promise<void> {
     const entry = this._sessions.get(orgId)
     if (entry) {
-      await entry.sock.logout().catch(() => {})
-      entry.sock.end(undefined)
-      this._sessions.delete(orgId)
+      await entry.client.logout().catch(() => {})
+      await this._destroyEntry(orgId)
     }
-    const dir = sessionDir(orgId)
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
     await this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } })
   }
 
@@ -72,86 +76,128 @@ export class WhatsAppSessionManager {
     if (!entry || entry.status !== 'connected') {
       throw new Error('WhatsApp not connected for this organization')
     }
+
     const now = Date.now()
     if (now - entry.lastSentAt < SEND_COOLDOWN_MS) {
       throw new Error(`WhatsApp: wait ${SEND_COOLDOWN_MS / 1000}s between sends`)
     }
     entry.lastSentAt = now
 
-    let digits = to.replace(/\D/g, '')
-    // Mexico: WhatsApp dropped the '1' mobile prefix after 2021.
-    // +52 1 XXX XXX XXXX (13 digits) → 52 XXX XXX XXXX (12 digits)
-    if (digits.length === 13 && digits.startsWith('521')) {
-      digits = '52' + digits.slice(3)
-    }
-    const jid = `${digits}@s.whatsapp.net`
+    const digits = to.replace(/\D/g, '')
+    console.log(`[WhatsApp] Resolving number: ${maskPhone(digits)}`)
 
-    console.log(`[WhatsApp] Sending to JID: ${jid}`)
-
-    const result = await entry.sock.sendMessage(jid, { text })
-
-    if (!result) {
-      throw new Error(`WhatsApp: message to ${jid} was not delivered (sendMessage returned undefined — number may not have WhatsApp)`)
+    // Validates the number against WhatsApp servers and returns the correct
+    // chat ID, handling country-specific quirks (e.g. Mexico's dropped '1' prefix)
+    const numberId = await entry.client.getNumberId(digits)
+    if (!numberId) {
+      throw new Error(`WhatsApp: number ${maskPhone(digits)} is not registered on WhatsApp`)
     }
 
-    console.log(`[WhatsApp] Message sent OK, id: ${result.key?.id}`)
+    await entry.client.sendMessage(numberId._serialized, text)
+    console.log(`[WhatsApp] Message sent OK to ${maskPhone(digits)}`)
   }
 
   private async _connect(orgId: string): Promise<void> {
-    const dir = sessionDir(orgId)
-    mkdirSync(dir, { recursive: true })
-
-    const { state, saveCreds } = await useMultiFileAuthState(dir)
-
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: 'warn' }),
+    const client = new Client({
+      authStrategy: new LocalAuth({
+        clientId: orgId,
+        dataPath: path.resolve(SESSIONS_DIR),
+      }),
+      puppeteer: {
+        headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ],
+      },
+      // Give slower servers more time to load WhatsApp Web
+      authTimeoutMs: 60_000,
     })
 
-    const entry: SessionEntry = { sock, status: 'qr_pending', qr: null, phone: null, lastSentAt: 0 }
+    const entry: SessionEntry = {
+      client,
+      status: 'qr_pending',
+      qr: null,
+      phone: null,
+      lastSentAt: 0,
+      qrTimer: null,
+    }
     this._sessions.set(orgId, entry)
 
-    sock.ev.on('connection.update', async ({ qr, connection, lastDisconnect }) => {
-      if (qr) {
-        entry.qr = qr
-        entry.status = 'qr_pending'
-        console.log(`[WhatsApp] org=${orgId} QR updated`)
-      }
+    client.on('qr', (qr) => {
+      entry.qr = qr
+      entry.status = 'qr_pending'
+      console.log(`[WhatsApp] org=${orgId} QR ready`)
 
-      if (connection === 'open') {
-        entry.status = 'connected'
-        entry.qr = null
-        const phone = sock.user?.id?.split(':')[0] ?? null
-        entry.phone = phone
-        console.log(`[WhatsApp] org=${orgId} connected as ${phone}`)
-
-        await this._db.whatsAppSession.upsert({
-          where: { organizationId: orgId },
-          create: { organizationId: orgId, phone },
-          update: { phone },
-        })
-      }
-
-      if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error as any)?.output?.statusCode
-        const loggedOut = statusCode === DisconnectReason.loggedOut
-        console.log(`[WhatsApp] org=${orgId} connection closed — statusCode=${statusCode} loggedOut=${loggedOut}`)
-
-        if (loggedOut) {
-          this._sessions.delete(orgId)
-          const dir = sessionDir(orgId)
-          if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
-          await this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } })
-        } else {
-          entry.status = 'disconnected'
-          if (statusCode !== 403) {
-            setTimeout(() => this._connect(orgId).catch(err => console.error(`[WhatsApp] reconnect failed org=${orgId}`, err)), 5_000)
-          }
+      // Reset the QR timeout every time a new QR is emitted
+      if (entry.qrTimer) clearTimeout(entry.qrTimer)
+      entry.qrTimer = setTimeout(() => {
+        if (entry.status === 'qr_pending') {
+          console.log(`[WhatsApp] org=${orgId} QR timeout — destroying client`)
+          this._destroyEntry(orgId)
         }
+      }, QR_SESSION_TIMEOUT_MS)
+    })
+
+    client.on('ready', async () => {
+      if (entry.qrTimer) {
+        clearTimeout(entry.qrTimer)
+        entry.qrTimer = null
+      }
+      entry.status = 'connected'
+      entry.qr = null
+      const phone = client.info?.wid?.user ?? null
+      entry.phone = phone
+      console.log(`[WhatsApp] org=${orgId} connected as ${phone ? maskPhone(phone) : 'unknown'}`)
+
+      await this._db.whatsAppSession.upsert({
+        where: { organizationId: orgId },
+        create: { organizationId: orgId, phone },
+        update: { phone },
+      }).catch(err => console.error(`[WhatsApp] db upsert failed org=${orgId}`, err))
+    })
+
+    client.on('auth_failure', (msg) => {
+      console.error(`[WhatsApp] org=${orgId} auth failure: ${msg}`)
+      this._destroyEntry(orgId)
+    })
+
+    client.on('disconnected', async (reason) => {
+      console.log(`[WhatsApp] org=${orgId} disconnected: ${reason}`)
+
+      if (reason === 'LOGOUT') {
+        // User removed this linked device from their phone — clean everything
+        await this._destroyEntry(orgId)
+        await this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } })
+          .catch(() => {})
+      } else {
+        // Transient disconnect (network, server restart) — reconnect automatically
+        entry.status = 'disconnected'
+        setTimeout(() => {
+          if (this._sessions.get(orgId)?.status === 'disconnected') {
+            this._connect(orgId).catch(err =>
+              console.error(`[WhatsApp] reconnect failed org=${orgId}`, err),
+            )
+          }
+        }, 5_000)
       }
     })
 
-    sock.ev.on('creds.update', saveCreds)
+    // initialize() starts Chrome; events fire asynchronously after
+    await client.initialize().catch(err => {
+      console.error(`[WhatsApp] initialize failed org=${orgId}`, err)
+      this._destroyEntry(orgId)
+    })
+  }
+
+  private async _destroyEntry(orgId: string): Promise<void> {
+    const entry = this._sessions.get(orgId)
+    if (!entry) return
+    if (entry.qrTimer) clearTimeout(entry.qrTimer)
+    this._sessions.delete(orgId)
+    await entry.client.destroy().catch(() => {})
   }
 }

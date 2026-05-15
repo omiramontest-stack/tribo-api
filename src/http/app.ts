@@ -102,6 +102,7 @@ import { createPlanGuard } from './middlewares/checkPlan.js'
 import cookiesPlugin from './plugins/cookies.js'
 import corsPlugin from './plugins/cors.js'
 import rateLimitPlugin from './plugins/rateLimit.js'
+import securityPlugin from './plugins/security.js'
 import { authRoutes } from './routes/auth.routes.js'
 import { organizationRoutes } from './routes/organization.routes.js'
 import { walletRoutes } from './routes/wallet.routes.js'
@@ -112,6 +113,7 @@ import { analyticsRoutes } from './routes/analytics.routes.js'
 export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorker; whatsappManager: WhatsAppSessionManager }> {
   const app = Fastify({ logger: true })
 
+  await app.register(securityPlugin)
   await app.register(cookiesPlugin)
   await app.register(corsPlugin)
   await app.register(rateLimitPlugin)

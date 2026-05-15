@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      API_URL: ${API_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      CLIENT_URL: ${CLIENT_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+      TELNYX_API_KEY: ${TELNYX_API_KEY}
+      TELNYX_PHONE_NUMBER: ${TELNYX_PHONE_NUMBER}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID}
+      APPLE_PASS_TYPE_ID: ${APPLE_PASS_TYPE_ID}
+      APPLE_APNS_KEY_ID: ${APPLE_APNS_KEY_ID}
+      APPLE_APNS_KEY: ${APPLE_APNS_KEY}
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      WHATSAPP_SESSIONS_DIR: /app/data/whatsapp-sessions
+    volumes:
+      # Named volume — survives every docker-compose up --build
+      - whatsapp_sessions:/app/data/whatsapp-sessions
+    restart: unless-stopped
+
+volumes:
+  # Declared as named volume: data lives on the host, not inside the container
+  whatsapp_sessions:
