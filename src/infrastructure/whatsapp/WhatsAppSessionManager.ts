@@ -16,6 +16,8 @@ function maskPhone(phone: string): string {
 
 export type WhatsAppStatus = 'disconnected' | 'qr_pending' | 'connected'
 
+type SSESubscriber = (event: string, data: object) => void
+
 const SEND_COOLDOWN_MS = 5_000
 const QR_SESSION_TIMEOUT_MS = 5 * 60 * 1000
 const SESSIONS_DIR = process.env.WHATSAPP_SESSIONS_DIR ?? './whatsapp-sessions'
@@ -31,8 +33,25 @@ interface SessionEntry {
 
 export class WhatsAppSessionManager {
   private readonly _sessions = new Map<string, SessionEntry>()
+  private readonly _subscribers = new Map<string, Set<SSESubscriber>>()
 
   constructor(private readonly _db: PrismaClient) {}
+
+  // ── SSE pub/sub ─────────────────────────────────────────────────────────────
+
+  subscribe(orgId: string, fn: SSESubscriber): () => void {
+    if (!this._subscribers.has(orgId)) this._subscribers.set(orgId, new Set())
+    this._subscribers.get(orgId)!.add(fn)
+    return () => { this._subscribers.get(orgId)?.delete(fn) }
+  }
+
+  private _emit(orgId: string, event: string, data: object): void {
+    this._subscribers.get(orgId)?.forEach(fn => {
+      try { fn(event, data) } catch { /* subscriber disconnected */ }
+    })
+  }
+
+  // ── Public API ──────────────────────────────────────────────────────────────
 
   async restoreAll(): Promise<void> {
     const rows = await this._db.whatsAppSession.findMany()
@@ -100,6 +119,8 @@ export class WhatsAppSessionManager {
     console.log(`[WhatsApp] Message sent OK to ${maskPhone(digits)}`)
   }
 
+  // ── Internal ────────────────────────────────────────────────────────────────
+
   private async _connect(orgId: string): Promise<void> {
     const authDir = path.resolve(SESSIONS_DIR, `session-${orgId}`)
     const { state, saveCreds } = await useMultiFileAuthState(authDir)
@@ -133,11 +154,13 @@ export class WhatsAppSessionManager {
         entry.qr = qr
         entry.status = 'qr_pending'
         console.log(`[WhatsApp] org=${orgId} QR ready`)
+        this._emit(orgId, 'qr', { qr })
 
         if (entry.qrTimer) clearTimeout(entry.qrTimer)
         entry.qrTimer = setTimeout(() => {
           if (entry.status === 'qr_pending') {
             console.log(`[WhatsApp] org=${orgId} QR timeout — destroying`)
+            this._emit(orgId, 'disconnected', {})
             this._destroyEntry(orgId)
           }
         }, QR_SESSION_TIMEOUT_MS)
@@ -150,6 +173,7 @@ export class WhatsAppSessionManager {
         const phone = sock.user?.id?.split(':')[0] ?? null
         entry.phone = phone
         console.log(`[WhatsApp] org=${orgId} connected as ${phone ? maskPhone(phone) : 'unknown'}`)
+        this._emit(orgId, 'connected', { phone })
 
         await this._db.whatsAppSession.upsert({
           where: { organizationId: orgId },
@@ -163,10 +187,12 @@ export class WhatsAppSessionManager {
         console.log(`[WhatsApp] org=${orgId} disconnected: ${statusCode}`)
 
         if (statusCode === DisconnectReason.loggedOut) {
+          this._emit(orgId, 'disconnected', {})
           await this._destroyEntry(orgId)
           await this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } }).catch(() => {})
         } else {
           entry.status = 'disconnected'
+          this._emit(orgId, 'reconnecting', {})
           setTimeout(() => {
             if (this._sessions.get(orgId)?.status === 'disconnected') {
               this._connect(orgId).catch(err =>
