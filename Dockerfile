@@ -41,7 +41,9 @@ RUN npx prisma generate
 COPY --from=builder /app/dist ./dist
 
 # Run as non-root — limits blast radius if Puppeteer/Chrome is exploited
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && mkdir -p /app/whatsapp-sessions \
+    && chown -R appuser:appgroup /app/whatsapp-sessions
 USER appuser
 
 EXPOSE 3000
