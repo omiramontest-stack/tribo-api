@@ -16,20 +16,6 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 
-# Chromium and dependencies required by whatsapp-web.js (Puppeteer)
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    dbus \
-    && rm -rf /var/cache/apk/*
-
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
 COPY package*.json ./
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
@@ -40,7 +26,7 @@ RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
-# Run as non-root — limits blast radius if Puppeteer/Chrome is exploited
+# Run as non-root
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
     && mkdir -p /app/whatsapp-sessions \
     && chown -R appuser:appgroup /app/whatsapp-sessions
