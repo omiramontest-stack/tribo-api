@@ -47,11 +47,14 @@ export function whatsappRoutes(manager: WhatsAppSessionManager, orgRepo: Organiz
       const isMember = await orgRepo.isMember(payload.adminId, id)
       if (!isMember) return reply.code(403).send({ error: 'FORBIDDEN' })
 
+      const origin = request.headers.origin ?? process.env.FRONTEND_URL ?? '*'
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Credentials': 'true',
       })
       reply.raw.flushHeaders()
 
