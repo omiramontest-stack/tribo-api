@@ -29,7 +29,7 @@ export const whatsappConnectRateLimit = {
   config: {
     rateLimit: {
       max: 5,
-      timeWindow: '1 hour',
+      timeWindow: '2 minutes',
     },
   },
 }
