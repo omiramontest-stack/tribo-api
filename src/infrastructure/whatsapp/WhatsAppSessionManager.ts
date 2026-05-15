@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, rmSync } from 'fs'
 import path from 'path'
+import pino from 'pino'
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
@@ -76,9 +77,24 @@ export class WhatsAppSessionManager {
       throw new Error(`WhatsApp: wait ${SEND_COOLDOWN_MS / 1000}s between sends`)
     }
     entry.lastSentAt = now
-    // wa.me phone format → JID: digits only + @s.whatsapp.net
-    const jid = `${to.replace(/\D/g, '')}@s.whatsapp.net`
-    await entry.sock.sendMessage(jid, { text })
+
+    let digits = to.replace(/\D/g, '')
+    // Mexico: WhatsApp dropped the '1' mobile prefix after 2021.
+    // +52 1 XXX XXX XXXX (13 digits) → 52 XXX XXX XXXX (12 digits)
+    if (digits.length === 13 && digits.startsWith('521')) {
+      digits = '52' + digits.slice(3)
+    }
+    const jid = `${digits}@s.whatsapp.net`
+
+    console.log(`[WhatsApp] Sending to JID: ${jid}`)
+
+    const result = await entry.sock.sendMessage(jid, { text })
+
+    if (!result) {
+      throw new Error(`WhatsApp: message to ${jid} was not delivered (sendMessage returned undefined — number may not have WhatsApp)`)
+    }
+
+    console.log(`[WhatsApp] Message sent OK, id: ${result.key?.id}`)
   }
 
   private async _connect(orgId: string): Promise<void> {
@@ -90,8 +106,7 @@ export class WhatsAppSessionManager {
     const sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
-      // Suppress Baileys console output
-      logger: { level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({ level: 'silent', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {}, child: () => ({} as any) }) } as any,
+      logger: pino({ level: 'warn' }),
     })
 
     const entry: SessionEntry = { sock, status: 'qr_pending', qr: null, phone: null, lastSentAt: 0 }
@@ -101,6 +116,7 @@ export class WhatsAppSessionManager {
       if (qr) {
         entry.qr = qr
         entry.status = 'qr_pending'
+        console.log(`[WhatsApp] org=${orgId} QR updated`)
       }
 
       if (connection === 'open') {
@@ -108,6 +124,7 @@ export class WhatsAppSessionManager {
         entry.qr = null
         const phone = sock.user?.id?.split(':')[0] ?? null
         entry.phone = phone
+        console.log(`[WhatsApp] org=${orgId} connected as ${phone}`)
 
         await this._db.whatsAppSession.upsert({
           where: { organizationId: orgId },
@@ -119,6 +136,7 @@ export class WhatsAppSessionManager {
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode
         const loggedOut = statusCode === DisconnectReason.loggedOut
+        console.log(`[WhatsApp] org=${orgId} connection closed — statusCode=${statusCode} loggedOut=${loggedOut}`)
 
         if (loggedOut) {
           this._sessions.delete(orgId)
@@ -127,9 +145,8 @@ export class WhatsAppSessionManager {
           await this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } })
         } else {
           entry.status = 'disconnected'
-          // Reconnect after brief delay unless it's a permanent error
           if (statusCode !== 403) {
-            setTimeout(() => this._connect(orgId).catch(() => {}), 5_000)
+            setTimeout(() => this._connect(orgId).catch(err => console.error(`[WhatsApp] reconnect failed org=${orgId}`, err)), 5_000)
           }
         }
       }
