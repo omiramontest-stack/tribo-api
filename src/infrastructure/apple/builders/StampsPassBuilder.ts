@@ -19,11 +19,11 @@ export class StampsPassBuilder implements PassBuilder {
         headerFields: [
           { key: 'count', label: 'Sellos', value: `${data.currentStamps} / ${rules.totalStamps}` },
         ],
-        primaryFields: [
-          { key: 'reward', label: 'Recompensa', value: rules.reward },
-        ],
         secondaryFields: [
           { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
+          { key: 'reward', label: 'Recompensa', value: rules.reward },
+        ],
+        auxiliaryFields: [
           { key: 'remaining', label: 'Faltan', value: `${remaining} sello${remaining !== 1 ? 's' : ''}` },
         ],
         backFields: [
@@ -39,6 +39,6 @@ export class StampsPassBuilder implements PassBuilder {
   async buildAssets(wallet: Wallet, pass: Pass): Promise<Record<string, Buffer>> {
     const data = pass.data as StampsData
     const rules = wallet.rules as StampsRules
-    return buildStampsStripSet(data.currentStamps, rules.totalStamps, wallet.primaryColor, wallet.accentColor)
+    return buildStampsStripSet(data.currentStamps, rules.totalStamps, wallet.primaryColor, wallet.accentColor, rules.stampIcon)
   }
 }

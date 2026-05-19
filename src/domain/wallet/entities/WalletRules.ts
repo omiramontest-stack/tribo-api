@@ -1,7 +1,10 @@
+export type StampIcon = 'check' | 'star' | 'heart' | 'coffee' | 'pizza' | 'beer' | 'bolt' | 'fire' | 'crown' | 'paw'
+
 export interface StampsRules {
   type: 'stamps'
   totalStamps: number
   reward: string
+  stampIcon?: StampIcon
 }
 
 export interface MembershipRules {

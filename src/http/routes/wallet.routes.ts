@@ -9,7 +9,7 @@ import { authenticate, requireOrgContext } from '../middlewares/authenticate.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
 
 const rulesSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('stamps'), totalStamps: z.number().int().min(1), reward: z.string() }),
+  z.object({ type: z.literal('stamps'), totalStamps: z.number().int().min(1), reward: z.string(), stampIcon: z.enum(['check', 'star', 'heart', 'coffee', 'pizza', 'beer', 'bolt', 'fire', 'crown', 'paw']).optional() }),
   z.object({ type: z.literal('membership'), level: z.string(), expiresInDays: z.number().int().nullable() }),
   z.object({ type: z.literal('points'), pointsLabel: z.string(), reward: z.string(), rewardThreshold: z.number().int().min(1) }),
   z.object({ type: z.literal('cashback'), cashbackPercent: z.number().positive().max(100), currency: z.string().min(1) }),
