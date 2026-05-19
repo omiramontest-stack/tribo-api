@@ -1,13 +1,12 @@
-import path from 'path'
 import pino from 'pino'
 import makeWASocket, {
-  useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
   type WASocket,
 } from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
 import type { PrismaClient } from '@prisma/client'
+import { useDbAuthState } from './dbAuthState.js'
 
 function maskPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -20,7 +19,6 @@ type SSESubscriber = (event: string, data: object) => void
 
 const SEND_COOLDOWN_MS = 5_000
 const QR_SESSION_TIMEOUT_MS = 5 * 60 * 1000
-const SESSIONS_DIR = process.env.WHATSAPP_SESSIONS_DIR ?? './whatsapp-sessions'
 
 interface SessionEntry {
   sock: WASocket
@@ -122,8 +120,7 @@ export class WhatsAppSessionManager {
   // ── Internal ────────────────────────────────────────────────────────────────
 
   private async _connect(orgId: string): Promise<void> {
-    const authDir = path.resolve(SESSIONS_DIR, `session-${orgId}`)
-    const { state, saveCreds } = await useMultiFileAuthState(authDir)
+    const { state, saveCreds } = await useDbAuthState(orgId, this._db)
     const { version } = await fetchLatestBaileysVersion()
 
     const sock = makeWASocket({
@@ -189,7 +186,11 @@ export class WhatsAppSessionManager {
         if (statusCode === DisconnectReason.loggedOut) {
           this._emit(orgId, 'disconnected', {})
           await this._destroyEntry(orgId)
-          await this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } }).catch(() => {})
+          await Promise.all([
+            this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } }),
+            this._db.whatsAppAuthCreds.deleteMany({ where: { organizationId: orgId } }),
+            this._db.whatsAppAuthKey.deleteMany({ where: { organizationId: orgId } }),
+          ]).catch(() => {})
         } else {
           entry.status = 'disconnected'
           this._emit(orgId, 'reconnecting', {})

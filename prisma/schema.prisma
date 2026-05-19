@@ -47,6 +47,8 @@ model Organization {
   subscription      Subscription?
   smsCredit         SmsCredit?
   whatsappSession   WhatsAppSession?
+  whatsappAuthCreds WhatsAppAuthCreds?
+  whatsappAuthKeys  WhatsAppAuthKey[]
 }
 
 model WhatsAppSession {
@@ -56,6 +58,26 @@ model WhatsAppSession {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppAuthCreds {
+  organizationId String       @id
+  data           String
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppAuthKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           String
+  keyId          String
+  data           String
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type, keyId])
+  @@index([organizationId])
 }
 
 model OrganizationMember {
