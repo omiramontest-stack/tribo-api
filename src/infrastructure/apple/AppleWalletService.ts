@@ -10,6 +10,8 @@ const API_URL = process.env.API_URL!
 const PASS_TYPE_ID = process.env.APPLE_PASS_TYPE_ID!
 const TEAM_ID = process.env.APPLE_TEAM_ID!
 
+export type RecentTransaction = { label: string; value: string }
+
 function hexToRgb(hex: string): string {
   const clean = hex.replace('#', '')
   const r = parseInt(clean.substring(0, 2), 16)
@@ -65,9 +67,7 @@ function buildStampsStrip(current: number, total: number, primaryColor: string, 
   return svgToPng(svg)
 }
 
-
 async function buildDaypassStripWithImage(imageUrl: string | null, primaryColor: string, accentColor: string, _eventName: string): Promise<Buffer> {
-  // eventTicket strip: 750×246px @2x — Apple Wallet renders primaryFields text on top automatically
   const W = 750
   const H = 246
 
@@ -84,7 +84,6 @@ async function buildDaypassStripWithImage(imageUrl: string | null, primaryColor:
     }
   }
 
-  // Fallback: gradient sin texto — Apple Wallet pone el nombre encima
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
       <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
@@ -109,8 +108,12 @@ async function fetchLogo(logoUrl: string): Promise<Buffer | null> {
   }
 }
 
-function buildPassJson(wallet: Wallet, pass: Pass) {
-  const base = {
+function txBackFields(txs: RecentTransaction[]) {
+  return txs.map((tx, i) => ({ key: `tx_${i}`, label: tx.label, value: tx.value }))
+}
+
+function buildBasePassJson(wallet: Wallet, pass: Pass) {
+  return {
     formatVersion: 1,
     passTypeIdentifier: PASS_TYPE_ID,
     serialNumber: pass.token,
@@ -130,177 +133,238 @@ function buildPassJson(wallet: Wallet, pass: Pass) {
       },
     ],
   }
+}
 
+function buildStampsPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: StampsRules,
+  d: StampsData,
+  pass: Pass,
+  txs: RecentTransaction[],
+) {
+  return {
+    ...base,
+    storeCard: {
+      headerFields: [
+        { key: 'count', label: 'Sellos', value: `${d.currentStamps} / ${r.totalStamps}` },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'reward', label: 'Recompensa', value: r.reward },
+      ],
+      backFields: [
+        { key: 'info', label: '¿Cómo ganar sellos?', value: 'Gana un sello por cada visita.' },
+        { key: 'remaining', label: 'Sellos faltantes', value: String(r.totalStamps - d.currentStamps) },
+        { key: 'reward', label: 'Recompensa', value: r.reward },
+        ...txBackFields(txs.slice(0, 1).map(tx => ({ label: 'Última actividad', value: tx.value }))),
+      ],
+    },
+  }
+}
+
+function buildMembershipPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: MembershipRules,
+  d: MembershipData,
+  pass: Pass,
+  txs: RecentTransaction[],
+) {
+  return {
+    ...base,
+    generic: {
+      primaryFields: [
+        { key: 'level', label: 'Nivel', value: r.level },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'since', label: 'Miembro desde', value: new Date(d.memberSince).toLocaleDateString('es-MX') },
+      ],
+      backFields: [
+        { key: 'expires', label: 'Vencimiento', value: d.expiresAt ? new Date(d.expiresAt).toLocaleDateString('es-MX') : 'Sin vencimiento' },
+        ...txBackFields(txs.slice(0, 1).map(tx => ({ label: 'Última renovación', value: tx.value }))),
+      ],
+    },
+  }
+}
+
+function buildPointsPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: PointsRules,
+  d: PointsData,
+  pass: Pass,
+  txs: RecentTransaction[],
+) {
+  return {
+    ...base,
+    storeCard: {
+      primaryFields: [
+        { key: 'points', label: r.pointsLabel, value: String(d.currentPoints) },
+      ],
+      secondaryFields: [
+        { key: 'reward', label: 'Recompensa', value: r.reward },
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+      ],
+      backFields: [
+        { key: 'threshold', label: 'Puntos para recompensa', value: String(r.rewardThreshold) },
+        ...txBackFields(txs),
+      ],
+    },
+  }
+}
+
+function buildCashbackPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: CashbackRules,
+  d: CashbackData,
+  pass: Pass,
+  txs: RecentTransaction[],
+) {
+  return {
+    ...base,
+    storeCard: {
+      primaryFields: [
+        { key: 'balance', label: 'Saldo cashback', value: `${r.currency} ${d.balance.toFixed(2)}` },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'percent', label: 'Cashback', value: `${r.cashbackPercent}%` },
+      ],
+      backFields: [
+        { key: 'info', label: 'Cómo funciona', value: `Acumulas ${r.cashbackPercent}% de cashback en cada compra.` },
+        ...txBackFields(txs),
+      ],
+    },
+  }
+}
+
+function buildDaypassPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: DaypassRules,
+  pass: Pass,
+) {
+  return {
+    ...base,
+    eventTicket: {
+      primaryFields: [
+        { key: 'event', label: 'Evento', value: r.eventName },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'venue', label: 'Lugar', value: r.venue },
+      ],
+      auxiliaryFields: [
+        { key: 'date', label: 'Fecha', value: new Date(r.eventDate).toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) },
+      ],
+      backFields: [
+        { key: 'info', label: 'Acceso', value: 'Pase de un solo uso. Presenta este código QR en la entrada del evento.' },
+      ],
+    },
+  }
+}
+
+function buildBundlePassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: BundleRules,
+  d: BundleData,
+  pass: Pass,
+) {
+  return {
+    ...base,
+    storeCard: {
+      primaryFields: [
+        { key: 'remaining', label: r.label, value: String(d.remainingUses) },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'total', label: 'Total usos', value: String(r.totalUses) },
+      ],
+      backFields: [
+        { key: 'info', label: 'Cómo usar', value: `Presenta este código QR para consumir uno de tus ${r.totalUses} ${r.label}.` },
+      ],
+    },
+  }
+}
+
+function buildGiftCardPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: GiftCardRules,
+  d: GiftCardData,
+  pass: Pass,
+  txs: RecentTransaction[],
+) {
+  return {
+    ...base,
+    storeCard: {
+      primaryFields: [
+        { key: 'balance', label: 'Saldo disponible', value: `${r.currency} ${d.currentBalance.toFixed(2)}` },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'initial', label: 'Saldo inicial', value: `${r.currency} ${d.initialBalance.toFixed(2)}` },
+      ],
+      backFields: [
+        { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR para redimir tu saldo.' },
+        ...txBackFields(txs),
+      ],
+    },
+  }
+}
+
+function buildCouponPassJson(
+  base: ReturnType<typeof buildBasePassJson>,
+  r: CouponRules,
+  d: CouponData,
+  pass: Pass,
+) {
+  const discountLabel = r.discountType === 'percent'
+    ? `${r.discount}% de descuento`
+    : `${r.currency ?? ''} ${r.discount} de descuento`
+  return {
+    ...base,
+    coupon: {
+      primaryFields: [
+        { key: 'discount', label: 'Descuento', value: discountLabel },
+      ],
+      secondaryFields: [
+        { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
+        { key: 'status', label: 'Estado', value: d.used ? 'Usado' : 'Disponible' },
+      ],
+      backFields: [
+        { key: 'expires', label: 'Vence', value: d.expiresAt ? new Date(d.expiresAt).toLocaleDateString('es-MX') : 'Sin vencimiento' },
+        { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR al momento del pago para aplicar el descuento.' },
+      ],
+    },
+  }
+}
+
+function buildPassJson(wallet: Wallet, pass: Pass, recentTransactions: RecentTransaction[]) {
+  const base = buildBasePassJson(wallet, pass)
   const rules = wallet.rules
   const data = pass.data
 
-  if (rules.type === 'stamps' && data.type === 'stamps') {
-    const r = rules as StampsRules
-    const d = data as StampsData
-    return {
-      ...base,
-      storeCard: {
-        headerFields: [
-          { key: 'count', label: 'Sellos', value: `${d.currentStamps} / ${r.totalStamps}` },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'reward', label: 'Recompensa', value: r.reward },
-        ],
-        backFields: [
-          { key: 'info', label: '¿Cómo ganar sellos?', value: 'Gana un sello por cada visita.' },
-          { key: 'remaining', label: 'Sellos faltantes', value: String(r.totalStamps - d.currentStamps) },
-          { key: 'reward', label: 'Recompensa', value: r.reward },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'stamps' && data.type === 'stamps')
+    return buildStampsPassJson(base, rules as StampsRules, data as StampsData, pass, recentTransactions)
 
-  if (rules.type === 'membership' && data.type === 'membership') {
-    const r = rules as MembershipRules
-    const d = data as MembershipData
-    return {
-      ...base,
-      generic: {
-        primaryFields: [
-          { key: 'level', label: 'Nivel', value: r.level },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'since', label: 'Miembro desde', value: new Date(d.memberSince).toLocaleDateString('es-MX') },
-        ],
-        backFields: [
-          { key: 'expires', label: 'Vencimiento', value: d.expiresAt ? new Date(d.expiresAt).toLocaleDateString('es-MX') : 'Sin vencimiento' },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'membership' && data.type === 'membership')
+    return buildMembershipPassJson(base, rules as MembershipRules, data as MembershipData, pass, recentTransactions)
 
-  if (rules.type === 'points' && data.type === 'points') {
-    const r = rules as PointsRules
-    const d = data as PointsData
-    return {
-      ...base,
-      storeCard: {
-        primaryFields: [
-          { key: 'points', label: r.pointsLabel, value: String(d.currentPoints) },
-        ],
-        secondaryFields: [
-          { key: 'reward', label: 'Recompensa', value: r.reward },
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-        ],
-        backFields: [
-          { key: 'threshold', label: 'Puntos para recompensa', value: String(r.rewardThreshold) },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'points' && data.type === 'points')
+    return buildPointsPassJson(base, rules as PointsRules, data as PointsData, pass, recentTransactions)
 
-  if (rules.type === 'cashback' && data.type === 'cashback') {
-    const r = rules as CashbackRules
-    const d = data as CashbackData
-    return {
-      ...base,
-      storeCard: {
-        primaryFields: [
-          { key: 'balance', label: 'Saldo cashback', value: `${r.currency} ${d.balance.toFixed(2)}` },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'percent', label: 'Cashback', value: `${r.cashbackPercent}%` },
-        ],
-        backFields: [
-          { key: 'info', label: 'Cómo funciona', value: `Acumulas ${r.cashbackPercent}% de cashback en cada compra. Tu saldo puede ser canjeado en tu próxima visita.` },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'cashback' && data.type === 'cashback')
+    return buildCashbackPassJson(base, rules as CashbackRules, data as CashbackData, pass, recentTransactions)
 
-  if (rules.type === 'daypass' && data.type === 'daypass') {
-    const r = rules as DaypassRules
-    return {
-      ...base,
-      eventTicket: {
-        primaryFields: [
-          { key: 'event', label: 'Evento', value: r.eventName },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'venue', label: 'Lugar', value: r.venue },
-        ],
-        auxiliaryFields: [
-          { key: 'date', label: 'Fecha', value: new Date(r.eventDate).toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) },
-        ],
-        backFields: [
-          { key: 'info', label: 'Acceso', value: 'Pase de un solo uso. Presenta este código QR en la entrada del evento.' },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'daypass' && data.type === 'daypass')
+    return buildDaypassPassJson(base, rules as DaypassRules, pass)
 
-  if (rules.type === 'bundle' && data.type === 'bundle') {
-    const r = rules as BundleRules
-    const d = data as BundleData
-    return {
-      ...base,
-      storeCard: {
-        primaryFields: [
-          { key: 'remaining', label: r.label, value: String(d.remainingUses) },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'total', label: 'Total usos', value: String(r.totalUses) },
-        ],
-        backFields: [
-          { key: 'info', label: 'Cómo usar', value: `Presenta este código QR para consumir uno de tus ${r.totalUses} ${r.label}.` },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'bundle' && data.type === 'bundle')
+    return buildBundlePassJson(base, rules as BundleRules, data as BundleData, pass)
 
-  if (rules.type === 'giftcard' && data.type === 'giftcard') {
-    const r = rules as GiftCardRules
-    const d = data as GiftCardData
-    return {
-      ...base,
-      storeCard: {
-        primaryFields: [
-          { key: 'balance', label: 'Saldo disponible', value: `${r.currency} ${d.currentBalance.toFixed(2)}` },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'initial', label: 'Saldo inicial', value: `${r.currency} ${d.initialBalance.toFixed(2)}` },
-        ],
-        backFields: [
-          { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR para redimir tu saldo de gift card.' },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'giftcard' && data.type === 'giftcard')
+    return buildGiftCardPassJson(base, rules as GiftCardRules, data as GiftCardData, pass, recentTransactions)
 
-  if (rules.type === 'coupon' && data.type === 'coupon') {
-    const r = rules as CouponRules
-    const d = data as CouponData
-    const discountLabel = r.discountType === 'percent'
-      ? `${r.discount}% de descuento`
-      : `${r.currency ?? ''} ${r.discount} de descuento`
-    return {
-      ...base,
-      coupon: {
-        primaryFields: [
-          { key: 'discount', label: 'Descuento', value: discountLabel },
-        ],
-        secondaryFields: [
-          { key: 'name', label: 'Nombre', value: `${pass.firstName} ${pass.lastName}` },
-          { key: 'status', label: 'Estado', value: d.used ? 'Usado' : 'Disponible' },
-        ],
-        backFields: [
-          { key: 'expires', label: 'Vence', value: d.expiresAt ? new Date(d.expiresAt).toLocaleDateString('es-MX') : 'Sin vencimiento' },
-          { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR al momento del pago para aplicar el descuento.' },
-        ],
-      },
-    }
-  }
+  if (rules.type === 'coupon' && data.type === 'coupon')
+    return buildCouponPassJson(base, rules as CouponRules, data as CouponData, pass)
 
   throw new Error('Unsupported wallet/pass type combination')
 }
@@ -310,8 +374,8 @@ const PLACEHOLDER_ICON = Buffer.from(
   'base64',
 )
 
-export async function generatePkPass(wallet: Wallet, pass: Pass): Promise<Buffer> {
-  const passJson = buildPassJson(wallet, pass)
+export async function generatePkPass(wallet: Wallet, pass: Pass, recentTransactions: RecentTransaction[] = []): Promise<Buffer> {
+  const passJson = buildPassJson(wallet, pass, recentTransactions)
 
   const signerCert = process.env.APPLE_SIGNER_CERT!.replace(/\\n/g, '\n')
   const signerKey = process.env.APPLE_SIGNER_KEY!.replace(/\\n/g, '\n')

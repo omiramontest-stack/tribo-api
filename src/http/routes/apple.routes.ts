@@ -4,9 +4,97 @@ import type { PassRepository } from '../../domain/pass/repository/PassRepository
 import type { WalletRepository } from '../../domain/wallet/repository/WalletRepository.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import type { RedeemDownloadTokenUseCase } from '../../application/pass/useCases/RedeemDownloadTokenUseCase.js'
-import { generatePkPass } from '../../infrastructure/apple/AppleWalletService.js'
+import type { Pass } from '../../domain/pass/entities/Pass.js'
+import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
+import type { CashbackRules, GiftCardRules } from '../../domain/wallet/entities/WalletRules.js'
+import { generatePkPass, type RecentTransaction } from '../../infrastructure/apple/AppleWalletService.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { isValidAdminRequest } from '../middlewares/authenticate.js'
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+}
+
+async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wallet): Promise<RecentTransaction[]> {
+  const { type } = pass.data
+
+  if (type === 'cashback') {
+    const currency = (wallet.rules as CashbackRules).currency
+    const txs = await db.cashbackTransaction.findMany({
+      where: { passId: pass.id },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    })
+    return txs.map(tx => ({
+      label: formatDate(tx.createdAt),
+      value: tx.cashbackAmount > 0
+        ? `+${currency} ${tx.cashbackAmount.toFixed(2)} · compra $${tx.purchaseAmount}`
+        : `Canjeo ${currency} ${Math.abs(tx.cashbackAmount).toFixed(2)}`,
+    }))
+  }
+
+  if (type === 'giftcard') {
+    const currency = (wallet.rules as GiftCardRules).currency
+    const events = await db.passEvent.findMany({
+      where: { passId: pass.id, type: { in: ['giftcard_credited', 'giftcard_redeemed'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    })
+    return events.map(ev => {
+      const meta = ev.metadata as Record<string, unknown>
+      const amount = (meta.amount as number).toFixed(2)
+      return {
+        label: formatDate(ev.createdAt),
+        value: ev.type === 'giftcard_credited'
+          ? `+${currency} ${amount} recargado`
+          : `Usaste ${currency} ${amount}`,
+      }
+    })
+  }
+
+  if (type === 'stamps') {
+    const events = await db.passEvent.findMany({
+      where: { passId: pass.id, type: { in: ['stamp_added', 'stamp_redeemed'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    })
+    return events.map(ev => {
+      const meta = ev.metadata as Record<string, unknown>
+      return {
+        label: formatDate(ev.createdAt),
+        value: ev.type === 'stamp_redeemed'
+          ? '¡Sellos completados!'
+          : `Sello ${meta.currentStamps}/${meta.totalStamps}`,
+      }
+    })
+  }
+
+  if (type === 'points') {
+    const events = await db.passEvent.findMany({
+      where: { passId: pass.id, type: 'points_added' },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    })
+    return events.map(ev => {
+      const meta = ev.metadata as Record<string, unknown>
+      return {
+        label: formatDate(ev.createdAt),
+        value: `+${meta.amount} puntos · Total: ${meta.currentPoints}`,
+      }
+    })
+  }
+
+  if (type === 'membership') {
+    const events = await db.passEvent.findMany({
+      where: { passId: pass.id, type: 'membership_renewed' },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    })
+    return events.map(ev => ({ label: formatDate(ev.createdAt), value: 'Membresía renovada' }))
+  }
+
+  return []
+}
 
 export function appleRoutes(
   db: PrismaClient,
@@ -33,7 +121,8 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send({ error: 'Wallet not found' })
 
-      const buffer = await generatePkPass(wallet, pass)
+      const recentTransactions = await buildRecentTransactions(db, pass, wallet)
+      const buffer = await generatePkPass(wallet, pass, recentTransactions)
 
       if (dlToken) await redeemDownloadToken.run(dlToken)
 
@@ -125,7 +214,8 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send()
 
-      const buffer = await generatePkPass(wallet, pass)
+      const recentTransactions = await buildRecentTransactions(db, pass, wallet)
+      const buffer = await generatePkPass(wallet, pass, recentTransactions)
 
       reply
         .header('Content-Type', 'application/vnd.apple.pkpass')
