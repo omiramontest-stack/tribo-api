@@ -19,18 +19,22 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
   const { type } = pass.data
 
   if (type === 'cashback') {
-    const currency = (wallet.rules as CashbackRules).currency
+    const rules = wallet.rules as CashbackRules
     const txs = await db.cashbackTransaction.findMany({
       where: { passId: pass.id },
       orderBy: { createdAt: 'desc' },
-      take: 3,
     })
-    return txs.map(tx => ({
-      label: formatDate(tx.createdAt),
-      value: tx.cashbackAmount > 0
-        ? `+${currency} ${tx.cashbackAmount.toFixed(2)} · compra $${tx.purchaseAmount}`
-        : `Canjeo ${currency} ${Math.abs(tx.cashbackAmount).toFixed(2)}`,
-    }))
+    return txs.map(tx => {
+      if (tx.cashbackAmount <= 0)
+        return { label: formatDate(tx.createdAt), value: `Canjeo ${rules.currency} ${Math.abs(tx.cashbackAmount).toFixed(2)}` }
+
+      const isPromo = tx.cashbackPercent !== rules.cashbackPercent
+      const percentLabel = isPromo ? ` (${tx.cashbackPercent}% promo)` : ` (${tx.cashbackPercent}%)`
+      return {
+        label: formatDate(tx.createdAt),
+        value: `+${rules.currency} ${tx.cashbackAmount.toFixed(2)} · $${tx.purchaseAmount}${percentLabel}`,
+      }
+    })
   }
 
   if (type === 'giftcard') {
@@ -38,7 +42,6 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: { in: ['giftcard_credited', 'giftcard_redeemed'] } },
       orderBy: { createdAt: 'desc' },
-      take: 3,
     })
     return events.map(ev => {
       const meta = ev.metadata as Record<string, unknown>
@@ -56,7 +59,6 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: { in: ['stamp_added', 'stamp_redeemed'] } },
       orderBy: { createdAt: 'desc' },
-      take: 1,
     })
     return events.map(ev => {
       const meta = ev.metadata as Record<string, unknown>
@@ -73,7 +75,6 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: 'points_added' },
       orderBy: { createdAt: 'desc' },
-      take: 3,
     })
     return events.map(ev => {
       const meta = ev.metadata as Record<string, unknown>
@@ -88,7 +89,6 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: 'membership_renewed' },
       orderBy: { createdAt: 'desc' },
-      take: 1,
     })
     return events.map(ev => ({ label: formatDate(ev.createdAt), value: 'Membresía renovada' }))
   }

@@ -11,9 +11,9 @@ import type { PassWithWallet } from './GetPassByTokenUseCase.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { PassData, StampsData, MembershipData, PointsData, CashbackData, BundleData, GiftCardData, CouponData } from '../../../domain/pass/entities/PassData.js'
-import type { StampsRules, MembershipRules, PointsRules, CashbackRules, BundleRules, GiftCardRules, CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { StampsRules, MembershipRules, CashbackRules, CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { AppError } from '../../common/AppError.js'
-import { sendPassUpdateNotification, sendCampaignNotification } from '../../../infrastructure/apple/ApnsService.js'
+import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
 import { updateGoogleWalletObject } from '../../../infrastructure/google/GoogleWalletService.js'
 import type { PassEventType } from '../../../domain/analytics/entities/PassEvent.js'
 
@@ -25,8 +25,6 @@ type ActionResult = {
   updatedData: PassData
   eventType: PassEventType
   eventMetadata: Record<string, unknown>
-  notificationTitle: string
-  notificationBody: string
 }
 
 export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWithWallet> {
@@ -71,43 +69,43 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     const data = pass.data
 
     if (action === 'add_stamp' && data.type === 'stamps')
-      return this.applyAddStamp(data, wallet.rules as StampsRules, wallet.businessName)
+      return this.applyAddStamp(data, wallet.rules as StampsRules)
 
     if (action === 'add_points' && data.type === 'points')
-      return this.applyAddPoints(data, wallet.rules as PointsRules, wallet.businessName, dto.amount ?? 1)
+      return this.applyAddPoints(data, dto.amount ?? 1)
 
     if (action === 'renew_membership' && data.type === 'membership')
-      return this.applyRenewMembership(data, wallet.rules as MembershipRules, wallet.businessName)
+      return this.applyRenewMembership(data, wallet.rules as MembershipRules)
 
     if (action === 'add_cashback' && data.type === 'cashback') {
       if (!dto.purchaseAmount || dto.purchaseAmount <= 0)
         throw new AppError('INVALID_INPUT', 'purchaseAmount is required and must be positive', 400)
-      return this.applyAddCashback(data, wallet.rules as CashbackRules, wallet.businessName, pass.id, dto.purchaseAmount, dto.cashbackPercent, dto.description)
+      return this.applyAddCashback(data, wallet.rules as CashbackRules, pass.id, dto.purchaseAmount, dto.cashbackPercent, dto.description)
     }
 
     if (action === 'subtract_cashback' && data.type === 'cashback') {
       if (!dto.amount || dto.amount <= 0)
         throw new AppError('INVALID_INPUT', 'amount is required and must be positive', 400)
-      return this.applySubtractCashback(data, wallet.rules as CashbackRules, wallet.businessName, pass.id, dto.amount, dto.description)
+      return this.applySubtractCashback(data, pass.id, dto.amount, dto.description)
     }
 
     if (action === 'use_bundle' && data.type === 'bundle')
-      return this.applyUseBundle(data, wallet.rules as BundleRules, wallet.businessName)
+      return this.applyUseBundle(data)
 
     if (action === 'add_giftcard' && data.type === 'giftcard') {
       if (!dto.amount || dto.amount <= 0)
         throw new AppError('INVALID_INPUT', 'amount is required and must be positive', 400)
-      return this.applyAddGiftcard(data, wallet.rules as GiftCardRules, wallet.businessName, dto.amount)
+      return this.applyAddGiftcard(data, dto.amount)
     }
 
     if (action === 'subtract_giftcard' && data.type === 'giftcard') {
       if (!dto.amount || dto.amount <= 0)
         throw new AppError('INVALID_INPUT', 'amount is required and must be positive', 400)
-      return this.applySubtractGiftcard(data, wallet.rules as GiftCardRules, wallet.businessName, dto.amount)
+      return this.applySubtractGiftcard(data, dto.amount)
     }
 
     if (action === 'redeem_coupon' && data.type === 'coupon')
-      return this.applyRedeemCoupon(data, wallet.rules as CouponRules, wallet.businessName)
+      return this.applyRedeemCoupon(data, wallet.rules as CouponRules)
 
     throw new AppError('ACTION_MISMATCH', 'Action does not match pass type', 400)
   }
@@ -126,9 +124,6 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
 
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
-      result.notificationTitle
-        ? sendCampaignNotification(pushTokens, result.notificationTitle, result.notificationBody)
-        : Promise.resolve(),
       updateGoogleWalletObject(wallet, pass),
       this._passEventRepository.save({
         id: randomUUID(),
@@ -143,32 +138,26 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     ])
   }
 
-  private applyAddStamp(data: StampsData, rules: StampsRules, businessName: string): ActionResult {
+  private applyAddStamp(data: StampsData, rules: StampsRules): ActionResult {
     const newStamps = Math.min(data.currentStamps + 1, rules.totalStamps)
     const isComplete = newStamps >= rules.totalStamps
     return {
       updatedData: { ...data, currentStamps: newStamps },
       eventType: isComplete ? 'stamp_redeemed' : 'stamp_added',
       eventMetadata: { currentStamps: newStamps, totalStamps: rules.totalStamps },
-      notificationTitle: `¡Nuevo sello en ${businessName}!`,
-      notificationBody: isComplete
-        ? `¡Completaste tus ${rules.totalStamps} sellos! Reclama tu recompensa`
-        : `Tienes ${newStamps}/${rules.totalStamps} sellos`,
     }
   }
 
-  private applyAddPoints(data: PointsData, rules: PointsRules, businessName: string, amount: number): ActionResult {
+  private applyAddPoints(data: PointsData, amount: number): ActionResult {
     const newPoints = data.currentPoints + amount
     return {
       updatedData: { ...data, currentPoints: newPoints },
       eventType: 'points_added',
       eventMetadata: { amount, currentPoints: newPoints },
-      notificationTitle: `¡+${amount} ${rules.pointsLabel} en ${businessName}!`,
-      notificationBody: `Total: ${newPoints} ${rules.pointsLabel}`,
     }
   }
 
-  private applyRenewMembership(data: MembershipData, rules: MembershipRules, businessName: string): ActionResult {
+  private applyRenewMembership(data: MembershipData, rules: MembershipRules): ActionResult {
     const expiresAt = rules.expiresInDays
       ? new Date(Date.now() + rules.expiresInDays * 86400000).toISOString()
       : null
@@ -176,15 +165,12 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       updatedData: { ...data, expiresAt },
       eventType: 'membership_renewed',
       eventMetadata: { expiresAt },
-      notificationTitle: `¡Membresía renovada en ${businessName}!`,
-      notificationBody: `Válida hasta ${expiresAt ? new Date(expiresAt).toLocaleDateString('es-MX') : 'sin vencimiento'}`,
     }
   }
 
   private async applyAddCashback(
     data: CashbackData,
     rules: CashbackRules,
-    businessName: string,
     passId: string,
     purchaseAmount: number,
     cashbackPercent?: number,
@@ -208,15 +194,11 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       updatedData: { ...data, balance: newBalance },
       eventType: 'cashback_added',
       eventMetadata: { purchaseAmount, cashbackPercent: percent, cashbackAmount, balance: newBalance },
-      notificationTitle: `¡+${rules.currency} ${cashbackAmount.toFixed(2)} de cashback en ${businessName}!`,
-      notificationBody: `Saldo: ${rules.currency} ${newBalance.toFixed(2)}`,
     }
   }
 
   private async applySubtractCashback(
     data: CashbackData,
-    rules: CashbackRules,
-    businessName: string,
     passId: string,
     amount: number,
     description?: string | null,
@@ -241,12 +223,10 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       updatedData: { ...data, balance: newBalance },
       eventType: 'cashback_redeemed',
       eventMetadata: { amount: redeemAmount, balance: newBalance },
-      notificationTitle: `¡Canjeaste ${rules.currency} ${redeemAmount.toFixed(2)} en ${businessName}!`,
-      notificationBody: `Saldo restante: ${rules.currency} ${newBalance.toFixed(2)}`,
     }
   }
 
-  private applyUseBundle(data: BundleData, rules: BundleRules, businessName: string): ActionResult {
+  private applyUseBundle(data: BundleData): ActionResult {
     if (data.remainingUses <= 0)
       throw new AppError('NO_USES_LEFT', 'No remaining uses on this bundle', 400)
 
@@ -255,23 +235,19 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       updatedData: { ...data, remainingUses: newRemaining },
       eventType: 'bundle_used',
       eventMetadata: { remainingUses: newRemaining },
-      notificationTitle: `Usaste 1 pase en ${businessName}`,
-      notificationBody: `Te quedan ${newRemaining} de ${rules.totalUses} ${rules.label}`,
     }
   }
 
-  private applyAddGiftcard(data: GiftCardData, rules: GiftCardRules, businessName: string, amount: number): ActionResult {
+  private applyAddGiftcard(data: GiftCardData, amount: number): ActionResult {
     const newBalance = roundCents(data.currentBalance + amount)
     return {
       updatedData: { ...data, currentBalance: newBalance },
       eventType: 'giftcard_credited',
       eventMetadata: { amount, currentBalance: newBalance },
-      notificationTitle: `¡+${rules.currency} ${amount.toFixed(2)} en tu Gift Card de ${businessName}!`,
-      notificationBody: `Saldo: ${rules.currency} ${newBalance.toFixed(2)}`,
     }
   }
 
-  private applySubtractGiftcard(data: GiftCardData, rules: GiftCardRules, businessName: string, amount: number): ActionResult {
+  private applySubtractGiftcard(data: GiftCardData, amount: number): ActionResult {
     if (amount > data.currentBalance)
       throw new AppError('INSUFFICIENT_BALANCE', `Cannot redeem ${amount}, current balance is ${data.currentBalance}`, 400)
 
@@ -280,12 +256,10 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       updatedData: { ...data, currentBalance: newBalance },
       eventType: 'giftcard_redeemed',
       eventMetadata: { amount, currentBalance: newBalance },
-      notificationTitle: `Usaste ${rules.currency} ${amount.toFixed(2)} de tu Gift Card de ${businessName}`,
-      notificationBody: `Saldo: ${rules.currency} ${newBalance.toFixed(2)}`,
     }
   }
 
-  private applyRedeemCoupon(data: CouponData, rules: CouponRules, businessName: string): ActionResult {
+  private applyRedeemCoupon(data: CouponData, rules: CouponRules): ActionResult {
     if (data.used)
       throw new AppError('COUPON_ALREADY_USED', 'This coupon has already been redeemed', 400)
     if (data.expiresAt && new Date(data.expiresAt) < new Date())
@@ -298,9 +272,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     return {
       updatedData: { ...data, used: true },
       eventType: 'coupon_redeemed',
-      eventMetadata: {},
-      notificationTitle: `¡Cupón canjeado en ${businessName}!`,
-      notificationBody: `Descuento de ${discountLabel} aplicado`,
+      eventMetadata: { discountLabel },
     }
   }
 }
