@@ -22,6 +22,7 @@ const generateSchema = z.object({
   lastName: z.string().min(1),
   phone: z.string().min(1),
   email: z.string().email().optional(),
+  photoUrl: z.string().url().optional(),
 })
 
 const updateSchema = z.object({

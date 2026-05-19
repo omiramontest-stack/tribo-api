@@ -56,7 +56,7 @@ export class GeneratePassUseCase implements UseCase<GeneratePassDto, Pass> {
       const expiresAt = rules.expiresInDays
         ? new Date(Date.now() + rules.expiresInDays * 86400000).toISOString()
         : null
-      data = { type: 'membership', memberSince: now, expiresAt }
+      data = { type: 'membership', memberSince: now, expiresAt, photoUrl: dto.photoUrl ?? null }
     }
 
     const pass: Pass = {

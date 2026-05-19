@@ -7,6 +7,7 @@ export interface MembershipData {
   type: 'membership'
   memberSince: string
   expiresAt: string | null
+  photoUrl: string | null
 }
 
 export interface PointsData {
