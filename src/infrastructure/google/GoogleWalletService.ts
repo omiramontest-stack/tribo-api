@@ -146,31 +146,39 @@ async function ensureClassExists(wallet: Wallet): Promise<void> {
 
   console.log('[GoogleWallet] ensureClassExists classId=%s', classId)
 
-  const getRes = await client.request({
-    url: `${BASE_URL}/loyaltyClass/${classId}`,
-    method: 'GET',
-  }).catch(e => {
-    const status = (e as { response?: { status?: number } }).response?.status ?? 500
-    console.log('[GoogleWallet] GET loyaltyClass status=%d', status)
-    return { status }
-  })
+  let classExists = false
 
-  if ((getRes as { status?: number }).status === 404 || (getRes as { data?: unknown }).data === undefined) {
+  try {
+    const getRes = await client.request({ url: `${BASE_URL}/loyaltyClass/${classId}`, method: 'GET' })
+    classExists = !!getRes.data
+    console.log('[GoogleWallet] GET loyaltyClass OK exists=%s', classExists)
+  } catch (e) {
+    const status = (e as { response?: { status?: number } }).response?.status ?? 500
+    const body = (e as { response?: { data?: unknown } }).response?.data
+    console.error('[GoogleWallet] GET loyaltyClass status=%d body=%s', status, JSON.stringify(body))
+    if (status !== 404) throw new Error(`Google Wallet API error ${status}: ${JSON.stringify(body)}`)
+  }
+
+  if (!classExists) {
     console.log('[GoogleWallet] class not found, creating...')
-    await client.request({
-      url: `${BASE_URL}/loyaltyClass`,
-      method: 'POST',
-      data: buildLoyaltyClass(wallet),
-    })
-    console.log('[GoogleWallet] class created OK')
+    try {
+      await client.request({ url: `${BASE_URL}/loyaltyClass`, method: 'POST', data: buildLoyaltyClass(wallet) })
+      console.log('[GoogleWallet] class created OK')
+    } catch (e) {
+      const body = (e as { response?: { data?: unknown } }).response?.data
+      console.error('[GoogleWallet] POST loyaltyClass error:', JSON.stringify(body))
+      throw e
+    }
   } else {
     console.log('[GoogleWallet] class exists, updating...')
-    await client.request({
-      url: `${BASE_URL}/loyaltyClass/${classId}`,
-      method: 'PUT',
-      data: buildLoyaltyClass(wallet),
-    })
-    console.log('[GoogleWallet] class updated OK')
+    try {
+      await client.request({ url: `${BASE_URL}/loyaltyClass/${classId}`, method: 'PUT', data: buildLoyaltyClass(wallet) })
+      console.log('[GoogleWallet] class updated OK')
+    } catch (e) {
+      const body = (e as { response?: { data?: unknown } }).response?.data
+      console.error('[GoogleWallet] PUT loyaltyClass error:', JSON.stringify(body))
+      throw e
+    }
   }
 }
 
