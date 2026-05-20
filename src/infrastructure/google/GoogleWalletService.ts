@@ -144,31 +144,45 @@ async function ensureClassExists(wallet: Wallet): Promise<void> {
   const client = await auth.getClient()
   const classId = buildClassId(wallet.id)
 
+  console.log('[GoogleWallet] ensureClassExists classId=%s', classId)
+
   const getRes = await client.request({
     url: `${BASE_URL}/loyaltyClass/${classId}`,
     method: 'GET',
-  }).catch(e => ({ status: (e as { response?: { status?: number } }).response?.status ?? 500 }))
+  }).catch(e => {
+    const status = (e as { response?: { status?: number } }).response?.status ?? 500
+    console.log('[GoogleWallet] GET loyaltyClass status=%d', status)
+    return { status }
+  })
 
   if ((getRes as { status?: number }).status === 404 || (getRes as { data?: unknown }).data === undefined) {
+    console.log('[GoogleWallet] class not found, creating...')
     await client.request({
       url: `${BASE_URL}/loyaltyClass`,
       method: 'POST',
       data: buildLoyaltyClass(wallet),
     })
+    console.log('[GoogleWallet] class created OK')
   } else {
+    console.log('[GoogleWallet] class exists, updating...')
     await client.request({
       url: `${BASE_URL}/loyaltyClass/${classId}`,
       method: 'PUT',
       data: buildLoyaltyClass(wallet),
     })
+    console.log('[GoogleWallet] class updated OK')
   }
 }
 
 export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass): Promise<string> {
+  console.log('[GoogleWallet] generateGoogleWalletUrl walletId=%s passToken=%s issuerId=%s', wallet.id, pass.token, ISSUER_ID)
+
   await ensureClassExists(wallet)
 
   const credentials = getCredentials()
   const loyaltyObject = buildLoyaltyObject(wallet, pass)
+
+  console.log('[GoogleWallet] loyaltyObject objectId=%s classId=%s', loyaltyObject.id, loyaltyObject.classId)
 
   const payload = {
     iss: credentials.client_email,
@@ -179,7 +193,9 @@ export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass): Promi
   }
 
   const token = jwt.sign(payload, credentials.private_key, { algorithm: 'RS256' })
-  return `https://pay.google.com/gp/v/save/${token}`
+  const url = `https://pay.google.com/gp/v/save/${token}`
+  console.log('[GoogleWallet] URL generated OK iss=%s', credentials.client_email)
+  return url
 }
 
 export async function updateGoogleWalletObject(wallet: Wallet, pass: Pass): Promise<void> {
@@ -187,9 +203,14 @@ export async function updateGoogleWalletObject(wallet: Wallet, pass: Pass): Prom
   const client = await auth.getClient()
   const objectId = buildObjectId(pass.token)
 
+  console.log('[GoogleWallet] updateGoogleWalletObject objectId=%s', objectId)
+
   await client.request({
     url: `${BASE_URL}/loyaltyObject/${objectId}`,
     method: 'PUT',
     data: buildLoyaltyObject(wallet, pass),
-  }).catch(() => null)
+  }).catch(e => {
+    console.error('[GoogleWallet] updateGoogleWalletObject error:', (e as Error).message)
+    return null
+  })
 }
