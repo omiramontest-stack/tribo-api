@@ -27,12 +27,16 @@ function getAuth() {
   return _auth
 }
 
+function sanitizeId(id: string) {
+  return id.replace(/-/g, '_')
+}
+
 function buildClassId(walletId: string) {
-  return `${ISSUER_ID}.wallet_${walletId}`
+  return `${ISSUER_ID}.wallet_${sanitizeId(walletId)}`
 }
 
 function buildObjectId(passToken: string) {
-  return `${ISSUER_ID}.pass_${passToken}`
+  return `${ISSUER_ID}.pass_${sanitizeId(passToken)}`
 }
 
 function buildLoyaltyClass(wallet: Wallet) {
@@ -58,7 +62,6 @@ function buildLoyaltyClass(wallet: Wallet) {
       contentDescription: { defaultValue: { language: 'es', value: wallet.businessName } },
     },
     hexBackgroundColor: wallet.primaryColor,
-    reviewStatus: 'UNDER_REVIEW',
     rewardsTier,
     rewardsTierLabel: wallet.description,
     linksModuleData: {
