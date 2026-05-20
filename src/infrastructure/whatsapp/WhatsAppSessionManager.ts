@@ -27,6 +27,7 @@ interface SessionEntry {
   phone: string | null
   lastSentAt: number
   qrTimer: ReturnType<typeof setTimeout> | null
+  flushAll: () => Promise<void>
 }
 
 export class WhatsAppSessionManager {
@@ -120,7 +121,7 @@ export class WhatsAppSessionManager {
   // ── Internal ────────────────────────────────────────────────────────────────
 
   private async _connect(orgId: string): Promise<void> {
-    const { state, saveCreds } = await useDbAuthState(orgId, this._db)
+    const { state, saveCreds, flushAll } = await useDbAuthState(orgId, this._db)
     const { version } = await fetchLatestBaileysVersion()
 
     const sock = makeWASocket({
@@ -130,6 +131,10 @@ export class WhatsAppSessionManager {
       printQRInTerminal: false,
       browser: ['Tribo', 'Chrome', '120.0'],
       generateHighQualityLinkPreview: false,
+      syncFullHistory: false,
+      markOnlineOnConnect: false,
+      maxMsgRetryCount: 0,
+      getMessage: async () => undefined,
     })
 
     const entry: SessionEntry = {
@@ -139,6 +144,7 @@ export class WhatsAppSessionManager {
       phone: null,
       lastSentAt: 0,
       qrTimer: null,
+      flushAll,
     }
     this._sessions.set(orgId, entry)
 
@@ -211,6 +217,7 @@ export class WhatsAppSessionManager {
     if (!entry) return
     if (entry.qrTimer) clearTimeout(entry.qrTimer)
     this._sessions.delete(orgId)
+    await entry.flushAll().catch(() => {})
     await entry.sock.end(undefined).catch(() => {})
   }
 }

@@ -51,6 +51,7 @@ import { GetScannedDaypassesUseCase } from '../application/pass/useCases/GetScan
 import { SendPassLinkUseCase } from '../application/pass/useCases/SendPassLinkUseCase.js'
 import { SendPassWhatsAppUseCase } from '../application/pass/useCases/SendPassWhatsAppUseCase.js'
 import { WhatsAppSessionManager } from '../infrastructure/whatsapp/WhatsAppSessionManager.js'
+import { WhatsAppCleanupWorker } from '../infrastructure/whatsapp/WhatsAppCleanupWorker.js'
 import { whatsappRoutes } from './routes/whatsapp.routes.js'
 import { RedeemDownloadTokenUseCase } from '../application/pass/useCases/RedeemDownloadTokenUseCase.js'
 import { ValidateDownloadTokenUseCase } from '../application/pass/useCases/ValidateDownloadTokenUseCase.js'
@@ -110,7 +111,7 @@ import { passRoutes } from './routes/pass.routes.js'
 import { appleRoutes } from './routes/apple.routes.js'
 import { analyticsRoutes } from './routes/analytics.routes.js'
 
-export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorker; whatsappManager: WhatsAppSessionManager }> {
+export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorker; whatsappManager: WhatsAppSessionManager; whatsappCleanup: WhatsAppCleanupWorker }> {
   const app = Fastify({ logger: true })
 
   await app.register(securityPlugin)
@@ -171,6 +172,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getScannedDaypasses = new GetScannedDaypassesUseCase(passRepo, walletRepo, orgRepo)
   const sendPassLink = new SendPassLinkUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo)
   const whatsappManager = new WhatsAppSessionManager(prisma)
+  const whatsappCleanup = new WhatsAppCleanupWorker(prisma)
   const sendPassWhatsApp = new SendPassWhatsAppUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo, whatsappManager)
   const redeemDownloadToken = new RedeemDownloadTokenUseCase(passDownloadTokenRepo)
   const validateDownloadToken = new ValidateDownloadTokenUseCase(passDownloadTokenRepo)
@@ -232,5 +234,5 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
     reply.code(500).send({ error: 'INTERNAL_ERROR', message: 'Internal server error' })
   })
 
-  return { app, worker, whatsappManager }
+  return { app, worker, whatsappManager, whatsappCleanup }
 }
