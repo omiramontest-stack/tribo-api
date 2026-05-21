@@ -62,6 +62,7 @@ function buildLoyaltyClass(wallet: Wallet) {
       contentDescription: { defaultValue: { language: 'es', value: wallet.businessName } },
     },
     hexBackgroundColor: wallet.primaryColor,
+    reviewStatus: 'UNDER_REVIEW',
     rewardsTier,
     rewardsTierLabel: wallet.description,
     linksModuleData: {
