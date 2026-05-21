@@ -18,17 +18,20 @@ export class StampsPassBuilder implements PassBuilder {
     return {
       ...base,
       storeCard: {
-        // headerFields vacíos — el conteo se muestra en el strip image
-        headerFields: [],
-        // Sin primaryFields: en storeCard se renderizan ENCIMA del strip.png,
-        // lo que tapaba los círculos de sellos. Toda la info visual va en el strip.
-        secondaryFields: [
-          { key: 'holder', label: 'NOMBRE', value: fullName(pass.firstName, pass.lastName) },
+        // headerFields: VENCIMIENTO a la derecha del logo en el header
+        // Layout: [logo] → [VENCIMIENTO]
+        headerFields: [
           { key: 'expires', label: 'VENCIMIENTO', value: 'Sin vencimiento' },
         ],
-        auxiliaryFields: [
+        // Sin primaryFields: en storeCard se renderizan ENCIMA del strip.png,
+        // lo que tapaba los círculos de sellos. Toda la info visual va en el strip.
+        //
+        // secondaryFields: fila inferior → [NOMBRE] [RECOMPENSA]
+        secondaryFields: [
+          { key: 'holder', label: 'NOMBRE', value: fullName(pass.firstName, pass.lastName) },
           { key: 'reward', label: 'RECOMPENSA', value: rules.reward },
         ],
+        auxiliaryFields: [],
         backFields: [
           { key: 'info', label: '¿Cómo ganar sellos?', value: 'Gana un sello por cada visita o compra.' },
           { key: 'progress', label: 'Progreso', value: `${data.currentStamps} de ${rules.totalStamps}` },

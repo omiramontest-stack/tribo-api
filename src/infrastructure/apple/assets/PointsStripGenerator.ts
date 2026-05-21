@@ -1,4 +1,5 @@
 import { svgToPng } from '../utils/imageUtils.js'
+import { stripPalette } from '../utils/colorUtils.js'
 import { PassDesignConfig } from '../PassDesignConfig.js'
 import type { StripGenerator, StripSet } from './StripGenerator.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
@@ -58,6 +59,7 @@ function buildPointsStrip(
   primaryColor: string,
   accentColor: string,
 ): Buffer {
+  const palette = stripPalette(primaryColor)
   const progressRatio = threshold > 0 ? Math.min(1, current / threshold) : 0
   const fillW = Math.round(BAR_W * progressRatio)
   const remaining = Math.max(0, threshold - current)
@@ -68,14 +70,14 @@ function buildPointsStrip(
     : '¡Listo para canjear!'
 
   // Posiciones verticales dentro del strip
-  const labelY   = CONTAINER_Y + 52          // "TUS PUNTOS"
-  const numberY  = CONTAINER_Y + 142         // número grande de puntos
-  const barY     = BAR_Y                     // barra de progreso
-  const numsY    = barY + BAR_H + 26         // "0" y max
-  const captionY = numsY                     // texto restante (centered)
+  const labelY   = CONTAINER_Y + 52   // etiqueta "TUS PUNTOS"
+  const numberY  = CONTAINER_Y + 142  // número grande de puntos
+  const barY     = BAR_Y              // barra de progreso
+  const numsY    = barY + BAR_H + 26  // etiquetas "0" y max
+  const captionY = numsY              // texto de puntos restantes (centrado)
 
   const fillRect = fillW > 0
-    ? `<rect x="${BAR_X}" y="${barY}" width="${fillW}" height="${BAR_H}" rx="${BAR_R}" fill="rgba(255,255,255,0.95)"/>`
+    ? `<rect x="${BAR_X}" y="${barY}" width="${fillW}" height="${BAR_H}" rx="${BAR_R}" fill="${palette.barFill}"/>`
     : ''
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
@@ -89,15 +91,15 @@ function buildPointsStrip(
     <!-- Fondo con gradiente -->
     <rect width="${W}" height="${H}" fill="url(#grad)"/>
 
-    <!-- Contenedor interior semi-transparente -->
+    <!-- Contenedor interior: color adapta a wallets claras u oscuras -->
     <rect
       x="${CONTAINER_X}" y="${CONTAINER_Y}"
       width="${CONTAINER_W}" height="${CONTAINER_H}"
       rx="${CONTAINER_R}"
-      fill="rgba(255,255,255,0.15)"
+      fill="${palette.container}"
     />
 
-    <!-- Label de puntos (e.g. "TUS PUNTOS") -->
+    <!-- Etiqueta del tipo de puntos (e.g. "TUS PUNTOS") -->
     <text
       x="${W / 2}" y="${labelY}"
       text-anchor="middle" dominant-baseline="middle"
@@ -105,7 +107,7 @@ function buildPointsStrip(
       font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
       font-weight="600"
       letter-spacing="1.5"
-      fill="rgba(255,255,255,0.75)"
+      fill="${palette.textMuted}"
     >${captionLabel}</text>
 
     <!-- Número grande de puntos -->
@@ -115,7 +117,7 @@ function buildPointsStrip(
       font-size="88"
       font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
       font-weight="700"
-      fill="rgba(255,255,255,1)"
+      fill="${palette.text}"
     >${current}</text>
 
     <!-- Barra de progreso: track -->
@@ -123,7 +125,7 @@ function buildPointsStrip(
       x="${BAR_X}" y="${barY}"
       width="${BAR_W}" height="${BAR_H}"
       rx="${BAR_R}"
-      fill="rgba(255,255,255,0.3)"
+      fill="${palette.barTrack}"
     />
 
     <!-- Barra de progreso: relleno -->
@@ -135,26 +137,26 @@ function buildPointsStrip(
       text-anchor="start" dominant-baseline="middle"
       font-size="20"
       font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
-      fill="rgba(255,255,255,0.55)"
+      fill="${palette.textFaint}"
     >0</text>
 
-    <!-- Etiqueta derecha (threshold) -->
+    <!-- Etiqueta derecha (threshold máximo) -->
     <text
       x="${BAR_X + BAR_W}" y="${numsY}"
       text-anchor="end" dominant-baseline="middle"
       font-size="20"
       font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
-      fill="rgba(255,255,255,0.55)"
+      fill="${palette.textFaint}"
     >${threshold}</text>
 
-    <!-- Texto de puntos restantes, centrado -->
+    <!-- Texto de puntos restantes, centrado entre los dos extremos -->
     <text
       x="${W / 2}" y="${captionY}"
       text-anchor="middle" dominant-baseline="middle"
       font-size="22"
       font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
       font-weight="400"
-      fill="rgba(255,255,255,0.85)"
+      fill="${palette.textMuted}"
     >${remainingText}</text>
   </svg>`
 

@@ -1,5 +1,5 @@
 import { svgToPng } from '../utils/imageUtils.js'
-import { contrastingColor } from '../utils/colorUtils.js'
+import { iconColorOnWhite, stripPalette } from '../utils/colorUtils.js'
 import { PassDesignConfig } from '../PassDesignConfig.js'
 import type { StripGenerator, StripSet } from './StripGenerator.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
@@ -172,7 +172,12 @@ function buildCircles(
   cols: number,
   icon: StampIcon,
 ): string {
-  const checkColor = contrastingColor(primaryColor)
+  const palette = stripPalette(primaryColor)
+
+  // Ícono activo: siempre sobre fondo blanco → usa el color de la marca si contrasta,
+  // si no, negro. Nunca blanco sobre blanco.
+  const activeIconColor = iconColorOnWhite(primaryColor)
+
   let circles = ''
 
   for (let i = 0; i < total; i++) {
@@ -187,11 +192,13 @@ function buildCircles(
     const cy = PAD_TOP + CIRCLE_R + row * CIRCLE_STEP
 
     if (i < current) {
+      // Sello canjeado: círculo blanco sólido + ícono que contrasta contra blanco
       circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="rgba(255,255,255,0.95)"/>`
-      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, checkColor)
+      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, activeIconColor)
     } else {
-      circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.5)" stroke-width="2.5"/>`
-      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, 'rgba(255,255,255,0.25)')
+      // Sello pendiente: círculo fantasma + ícono fantasma, ambos usando la paleta del strip
+      circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="${palette.container}" stroke="${palette.stampBorder}" stroke-width="2.5"/>`
+      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, palette.stampGhost)
     }
   }
 
@@ -211,6 +218,7 @@ export function buildStampsStrip(
   const H = PAD_TOP + totalGridH + TEXT_PAD + TEXT_SIZE + PAD_BOTTOM
 
   const circles = buildCircles(current, total, primaryColor, cols, icon)
+  const palette = stripPalette(primaryColor)
 
   // Caption: "2 / 5 — Un producto gratis"
   const caption = reward
@@ -235,7 +243,7 @@ export function buildStampsStrip(
       font-size="${TEXT_SIZE}"
       font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
       font-weight="500"
-      fill="rgba(255,255,255,0.9)"
+      fill="${palette.textMuted}"
       letter-spacing="0.3"
     >${caption}</text>
   </svg>`

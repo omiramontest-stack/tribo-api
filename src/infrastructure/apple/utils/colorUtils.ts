@@ -44,3 +44,47 @@ export function ensureWcagContrast(hex: string, minRatio = 4.5): string {
   }
   return color
 }
+
+/**
+ * Returns the best icon color for elements drawn INSIDE a white-filled circle
+ * (e.g. active stamp icons).
+ *
+ * Prefers the brand primary color when it has enough contrast on white (≥ 3:1);
+ * falls back to near-black for very light or white brand colors so the icon
+ * never becomes invisible.
+ */
+export function iconColorOnWhite(primaryColor: string): string {
+  // contrast ratio of primaryColor placed ON white background
+  const ratio = 1.05 / (hexLuminance(primaryColor) + 0.05)
+  return ratio >= 3.0 ? primaryColor : '#1A1A1A'
+}
+
+/**
+ * Generates a semantic color palette for SVG strip images whose background
+ * is a gradient from `primaryColor`.
+ *
+ * Handles both light wallets (uses dark ink) and dark wallets (uses white ink),
+ * so text and UI elements are always legible regardless of the brand color chosen.
+ */
+export function stripPalette(primaryColor: string) {
+  const isLight = hexLuminance(primaryColor) > 0.179
+  const rgb = isLight ? '26,26,26' : '255,255,255'
+  return {
+    /** Solid text color (titles, numbers). */
+    text:        isLight ? '#1A1A1A' : '#FFFFFF',
+    /** Labels y captions (80 % opacidad). */
+    textMuted:   `rgba(${rgb},0.80)`,
+    /** Etiquetas secundarias / dígitos auxiliares (50 % opacidad). */
+    textFaint:   `rgba(${rgb},0.50)`,
+    /** Track (fondo) de la barra de progreso. */
+    barTrack:    `rgba(${rgb},0.25)`,
+    /** Relleno de la barra de progreso. */
+    barFill:     `rgba(${rgb},0.95)`,
+    /** Overlay del contenedor interior (caja semi-transparente). */
+    container:   `rgba(${rgb},0.12)`,
+    /** Íconos de sellos inactivos (fantasma). */
+    stampGhost:  `rgba(${rgb},0.30)`,
+    /** Borde de sellos inactivos. */
+    stampBorder: `rgba(${rgb},0.45)`,
+  }
+}
