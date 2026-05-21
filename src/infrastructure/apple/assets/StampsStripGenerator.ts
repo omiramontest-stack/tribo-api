@@ -13,6 +13,9 @@ const CIRCLE_R = PassDesignConfig.stamps.circleRadius
 const CIRCLE_GAP = PassDesignConfig.stamps.circleGap
 const CIRCLE_STEP = CIRCLE_R * 2 + CIRCLE_GAP
 const PAD_TOP = PassDesignConfig.stamps.paddingTop
+const TEXT_PAD = 20   // gap between last circle row and progress text
+const TEXT_SIZE = 28  // font-size px for the progress caption
+const PAD_BOTTOM = 36 // padding below the text
 
 const BG_W = 540
 const BG_H = 660
@@ -27,6 +30,7 @@ export class StampsStripGenerator implements StripGenerator {
       wallet.primaryColor,
       wallet.accentColor,
       rules.stampIcon,
+      rules.reward,
     )
     const bg = renderBackground(wallet.primaryColor, wallet.accentColor)
     return {
@@ -200,12 +204,19 @@ export function buildStampsStrip(
   primaryColor: string,
   accentColor: string,
   icon: StampIcon = 'check',
+  reward = '',
 ): Buffer {
   const { cols, rows } = computeGrid(total)
   const totalGridH = rows * CIRCLE_STEP - CIRCLE_GAP
-  const H = PAD_TOP + totalGridH + PAD_TOP
+  const H = PAD_TOP + totalGridH + TEXT_PAD + TEXT_SIZE + PAD_BOTTOM
 
   const circles = buildCircles(current, total, primaryColor, cols, icon)
+
+  // Caption: "2 / 5 — Un producto gratis"
+  const caption = reward
+    ? `${current} / ${total} — ${reward}`
+    : `${current} / ${total}`
+  const captionY = PAD_TOP + totalGridH + TEXT_PAD + TEXT_SIZE
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${STRIP_W}" height="${H}">
     <defs>
@@ -216,6 +227,17 @@ export function buildStampsStrip(
     </defs>
     <rect width="${STRIP_W}" height="${H}" fill="url(#grad)"/>
     ${circles}
+    <text
+      x="${STRIP_W / 2}"
+      y="${captionY}"
+      text-anchor="middle"
+      dominant-baseline="auto"
+      font-size="${TEXT_SIZE}"
+      font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"
+      font-weight="500"
+      fill="rgba(255,255,255,0.9)"
+      letter-spacing="0.3"
+    >${caption}</text>
   </svg>`
 
   return svgToPng(svg)
@@ -227,8 +249,9 @@ export function buildStampsStripSet(
   primaryColor: string,
   accentColor: string,
   icon: StampIcon = 'check',
+  reward = '',
 ): Record<string, Buffer> {
-  const strip = buildStampsStrip(current, total, primaryColor, accentColor, icon)
+  const strip = buildStampsStrip(current, total, primaryColor, accentColor, icon, reward)
   return {
     'strip.png': strip,
     'strip@2x.png': strip,

@@ -14,20 +14,22 @@ import { GiftCardPassBuilder } from './builders/GiftCardPassBuilder.js'
 import { CouponPassBuilder } from './builders/CouponPassBuilder.js'
 import { GradientStripGenerator } from './assets/GradientStripGenerator.js'
 import { StampsStripGenerator } from './assets/StampsStripGenerator.js'
+import { PointsStripGenerator } from './assets/PointsStripGenerator.js'
 import { fetchImageBuffer, PLACEHOLDER_ICON } from './utils/imageUtils.js'
 import { ensureWcagContrast } from './utils/colorUtils.js'
 import type { RecentTransaction } from './utils/passFieldUtils.js'
 
 export type { RecentTransaction }
 
-// Strip generators are stateless — instantiate once and share across requests.
+// Strip generators son stateless — se instancian una sola vez y se comparten.
 const gradientGenerator = new GradientStripGenerator()
 const stampsGenerator = new StampsStripGenerator()
+const pointsGenerator = new PointsStripGenerator()
 
 const builders: Record<WalletType, PassBuilder> = {
   stamps: new StampsPassBuilder(stampsGenerator),
   membership: new MembershipPassBuilder(),
-  points: new PointsPassBuilder(gradientGenerator),
+  points: new PointsPassBuilder(pointsGenerator),
   cashback: new CashbackPassBuilder(gradientGenerator),
   daypass: new DaypassPassBuilder(),
   bundle: new BundlePassBuilder(),

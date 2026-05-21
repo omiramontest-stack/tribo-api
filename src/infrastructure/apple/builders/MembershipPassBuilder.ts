@@ -13,24 +13,29 @@ export class MembershipPassBuilder implements PassBuilder {
     const data = pass.data as MembershipData
 
     const expiresValue = data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento'
+    const sinceValue = formatDate(data.memberSince)
 
     return {
       ...base,
-      // generic pass type is correct for membership — renders with thumbnail support
+      // generic pass type es correcto para membresía — soporta thumbnail a la derecha
       generic: {
+        // primaryFields: valor principal grande (nivel de membresía)
         primaryFields: [
           { key: 'level', label: 'NIVEL', value: rules.level },
         ],
+        // secondaryFields: fecha de ingreso prominente
         secondaryFields: [
-          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'since', label: 'MIEMBRO DESDE', value: formatDate(data.memberSince) },
+          { key: 'since', label: 'MIEMBRO DESDE', value: sinceValue },
         ],
+        // auxiliaryFields: nombre + vencimiento — coincide con el diseño del frontend
         auxiliaryFields: [
-          { key: 'valid', label: 'VIGENCIA', value: expiresValue },
+          { key: 'holder', label: 'NOMBRE', value: fullName(pass.firstName, pass.lastName) },
+          { key: 'valid', label: 'VENCIMIENTO', value: expiresValue },
         ],
         backFields: [
+          { key: 'level_detail', label: 'Nivel de membresía', value: rules.level },
+          { key: 'since_detail', label: 'Miembro desde', value: sinceValue },
           { key: 'expires_detail', label: 'Vencimiento', value: expiresValue },
-          { key: 'level', label: 'Nivel de membresía', value: rules.level },
           ...txBackFields(txs.slice(0, 1).map(tx => ({ label: 'Última renovación', value: tx.value }))),
         ],
       },

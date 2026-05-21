@@ -17,19 +17,23 @@ export class CashbackPassBuilder implements PassBuilder {
     return {
       ...base,
       storeCard: {
+        // headerFields: porcentaje de cashback en la esquina superior derecha
         headerFields: [
           { key: 'rate', label: 'CASHBACK', value: `${rules.cashbackPercent}%` },
         ],
+        // primaryFields: se renderizan sobre el strip (gradiente limpio) — es intencional.
+        // El saldo grande sobre gradiente replica el diseño del frontend.
         primaryFields: [
-          // currencyCode lets Apple Wallet format the amount with locale-aware symbol
+          // currencyCode permite a Apple Wallet formatear con el símbolo de moneda correcto
           { key: 'balance', label: 'SALDO CASHBACK', value: data.balance, currencyCode: rules.currency },
         ],
         secondaryFields: [
           { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'rule', label: 'POR CADA COMPRA', value: `${rules.cashbackPercent}% de regreso` },
+          { key: 'rule', label: 'POR COMPRA', value: `${rules.cashbackPercent}% de regreso` },
         ],
         backFields: [
           { key: 'info', label: 'Cómo funciona', value: `Acumulas ${rules.cashbackPercent}% de cashback en cada compra.` },
+          { key: 'balance_detail', label: 'Saldo actual', value: `${rules.currency} ${data.balance.toFixed(2)}` },
           ...txBackFields(txs),
         ],
       },

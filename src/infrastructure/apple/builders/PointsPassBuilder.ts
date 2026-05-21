@@ -18,26 +18,19 @@ export class PointsPassBuilder implements PassBuilder {
     return {
       ...base,
       storeCard: {
-        headerFields: [
-          { key: 'points', label: 'PUNTOS', value: String(data.currentPoints) },
-        ],
-        primaryFields: [
-          { key: 'reward', label: 'RECOMPENSA', value: rules.reward },
-        ],
+        // headerFields vacíos — el número de puntos ya aparece grande en el strip image
+        headerFields: [],
+        // Sin primaryFields: se renderizan ENCIMA del strip.png y taparían la
+        // visualización de puntos + barra de progreso que está en el strip.
         secondaryFields: [
-          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
-          {
-            key: 'next',
-            label: 'PARA TU PRÓXIMA RECOMPENSA',
-            value: remaining > 0
-              ? `Faltan ${remaining} ${rules.pointsLabel}`
-              : '¡Listo para canjear!',
-          },
+          { key: 'holder', label: 'NOMBRE', value: fullName(pass.firstName, pass.lastName) },
         ],
+        auxiliaryFields: [],
         backFields: [
           { key: 'threshold', label: `${rules.pointsLabel} necesarios`, value: String(rules.rewardThreshold) },
           { key: 'current', label: `${rules.pointsLabel} acumulados`, value: String(data.currentPoints) },
           { key: 'remaining', label: `${rules.pointsLabel} restantes`, value: String(remaining) },
+          { key: 'reward', label: 'Recompensa', value: rules.reward },
           ...txBackFields(txs),
         ],
       },
