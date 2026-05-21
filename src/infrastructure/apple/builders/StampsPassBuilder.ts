@@ -3,10 +3,12 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { StampsData } from '../../../domain/pass/entities/PassData.js'
 import type { StampsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { buildStampsStripSet } from '../assets/StampsStripGenerator.js'
+import type { StripGenerator } from '../assets/StripGenerator.js'
 import { txBackFields, fullName, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class StampsPassBuilder implements PassBuilder {
+  constructor(private readonly stripGenerator: StripGenerator) {}
+
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
     const base = buildBasePassJson(wallet, pass)
     const rules = wallet.rules as StampsRules
@@ -17,14 +19,17 @@ export class StampsPassBuilder implements PassBuilder {
       ...base,
       storeCard: {
         headerFields: [
-          { key: 'count', label: 'Sellos', value: `${data.currentStamps} / ${rules.totalStamps}` },
+          { key: 'stamps', label: 'SELLOS', value: `${data.currentStamps}/${rules.totalStamps}` },
+        ],
+        primaryFields: [
+          { key: 'progress', label: 'PROGRESO', value: `${data.currentStamps} de ${rules.totalStamps}` },
         ],
         secondaryFields: [
-          { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'reward', label: 'Recompensa', value: rules.reward },
+          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
+          { key: 'reward', label: 'RECOMPENSA', value: rules.reward },
         ],
         auxiliaryFields: [
-          { key: 'remaining', label: 'Faltan', value: `${remaining} sello${remaining !== 1 ? 's' : ''}` },
+          { key: 'missing', label: 'FALTAN', value: `${remaining} sello${remaining !== 1 ? 's' : ''}` },
         ],
         backFields: [
           { key: 'info', label: '¿Cómo ganar sellos?', value: 'Gana un sello por cada visita o compra.' },
@@ -37,8 +42,6 @@ export class StampsPassBuilder implements PassBuilder {
   }
 
   async buildAssets(wallet: Wallet, pass: Pass): Promise<Record<string, Buffer>> {
-    const data = pass.data as StampsData
-    const rules = wallet.rules as StampsRules
-    return buildStampsStripSet(data.currentStamps, rules.totalStamps, wallet.primaryColor, wallet.accentColor, rules.stampIcon)
+    return this.stripGenerator.generate(wallet, pass)
   }
 }

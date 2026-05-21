@@ -1,6 +1,7 @@
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { RecentTransaction } from '../utils/passFieldUtils.js'
+import { hexToRgb } from '../utils/colorUtils.js'
 
 export type BasePassJson = ReturnType<typeof buildBasePassJson>
 
@@ -29,14 +30,6 @@ export function buildBasePassJson(wallet: Wallet, pass: Pass) {
       },
     ],
   }
-}
-
-function hexToRgb(hex: string): string {
-  const clean = hex.replace('#', '')
-  const r = parseInt(clean.substring(0, 2), 16)
-  const g = parseInt(clean.substring(2, 4), 16)
-  const b = parseInt(clean.substring(4, 6), 16)
-  return `rgb(${r},${g},${b})`
 }
 
 export interface PassBuilder {

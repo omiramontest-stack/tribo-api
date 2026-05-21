@@ -3,10 +3,12 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { PointsData } from '../../../domain/pass/entities/PassData.js'
 import type { PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
+import type { StripGenerator } from '../assets/StripGenerator.js'
 import { txBackFields, fullName, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class PointsPassBuilder implements PassBuilder {
+  constructor(private readonly stripGenerator: StripGenerator) {}
+
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
     const base = buildBasePassJson(wallet, pass)
     const rules = wallet.rules as PointsRules
@@ -17,21 +19,19 @@ export class PointsPassBuilder implements PassBuilder {
       ...base,
       storeCard: {
         headerFields: [
-          { key: 'points', label: rules.pointsLabel.toUpperCase(), value: String(data.currentPoints) },
+          { key: 'points', label: 'PUNTOS', value: String(data.currentPoints) },
         ],
         primaryFields: [
-          { key: 'reward', label: 'Recompensa', value: rules.reward },
+          { key: 'reward', label: 'RECOMPENSA', value: rules.reward },
         ],
         secondaryFields: [
-          { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
-        ],
-        auxiliaryFields: [
+          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
           {
-            key: 'progress',
-            label: 'Para tu próxima recompensa',
+            key: 'next',
+            label: 'PARA TU PRÓXIMA RECOMPENSA',
             value: remaining > 0
               ? `Faltan ${remaining} ${rules.pointsLabel}`
-              : `¡Listo para canjear!`,
+              : '¡Listo para canjear!',
           },
         ],
         backFields: [
@@ -44,7 +44,7 @@ export class PointsPassBuilder implements PassBuilder {
     }
   }
 
-  async buildAssets(wallet: Wallet): Promise<Record<string, Buffer>> {
-    return buildGradientStripSet(wallet.primaryColor, wallet.accentColor)
+  async buildAssets(wallet: Wallet, pass: Pass): Promise<Record<string, Buffer>> {
+    return this.stripGenerator.generate(wallet, pass)
   }
 }

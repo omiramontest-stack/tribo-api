@@ -3,10 +3,12 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { CashbackData } from '../../../domain/pass/entities/PassData.js'
 import type { CashbackRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
-import { txBackFields, fullName, formatCurrency, type RecentTransaction } from '../utils/passFieldUtils.js'
+import type { StripGenerator } from '../assets/StripGenerator.js'
+import { txBackFields, fullName, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class CashbackPassBuilder implements PassBuilder {
+  constructor(private readonly stripGenerator: StripGenerator) {}
+
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
     const base = buildBasePassJson(wallet, pass)
     const rules = wallet.rules as CashbackRules
@@ -16,14 +18,15 @@ export class CashbackPassBuilder implements PassBuilder {
       ...base,
       storeCard: {
         headerFields: [
-          { key: 'percent', label: 'Cashback', value: `${rules.cashbackPercent}%` },
+          { key: 'rate', label: 'CASHBACK', value: `${rules.cashbackPercent}%` },
         ],
         primaryFields: [
-          { key: 'balance', label: 'SALDO CASHBACK', value: formatCurrency(data.balance, rules.currency) },
+          // currencyCode lets Apple Wallet format the amount with locale-aware symbol
+          { key: 'balance', label: 'SALDO CASHBACK', value: data.balance, currencyCode: rules.currency },
         ],
         secondaryFields: [
-          { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'rate', label: 'Por cada compra', value: `${rules.cashbackPercent}% de regreso` },
+          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
+          { key: 'rule', label: 'POR CADA COMPRA', value: `${rules.cashbackPercent}% de regreso` },
         ],
         backFields: [
           { key: 'info', label: 'Cómo funciona', value: `Acumulas ${rules.cashbackPercent}% de cashback en cada compra.` },
@@ -33,7 +36,7 @@ export class CashbackPassBuilder implements PassBuilder {
     }
   }
 
-  async buildAssets(wallet: Wallet): Promise<Record<string, Buffer>> {
-    return buildGradientStripSet(wallet.primaryColor, wallet.accentColor)
+  async buildAssets(wallet: Wallet, pass: Pass): Promise<Record<string, Buffer>> {
+    return this.stripGenerator.generate(wallet, pass)
   }
 }

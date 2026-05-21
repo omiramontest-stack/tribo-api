@@ -12,16 +12,23 @@ import { DaypassPassBuilder } from './builders/DaypassPassBuilder.js'
 import { BundlePassBuilder } from './builders/BundlePassBuilder.js'
 import { GiftCardPassBuilder } from './builders/GiftCardPassBuilder.js'
 import { CouponPassBuilder } from './builders/CouponPassBuilder.js'
+import { GradientStripGenerator } from './assets/GradientStripGenerator.js'
+import { StampsStripGenerator } from './assets/StampsStripGenerator.js'
 import { fetchImageBuffer, PLACEHOLDER_ICON } from './utils/imageUtils.js'
+import { ensureWcagContrast } from './utils/colorUtils.js'
 import type { RecentTransaction } from './utils/passFieldUtils.js'
 
 export type { RecentTransaction }
 
+// Strip generators are stateless — instantiate once and share across requests.
+const gradientGenerator = new GradientStripGenerator()
+const stampsGenerator = new StampsStripGenerator()
+
 const builders: Record<WalletType, PassBuilder> = {
-  stamps: new StampsPassBuilder(),
+  stamps: new StampsPassBuilder(stampsGenerator),
   membership: new MembershipPassBuilder(),
-  points: new PointsPassBuilder(),
-  cashback: new CashbackPassBuilder(),
+  points: new PointsPassBuilder(gradientGenerator),
+  cashback: new CashbackPassBuilder(gradientGenerator),
   daypass: new DaypassPassBuilder(),
   bundle: new BundlePassBuilder(),
   giftcard: new GiftCardPassBuilder(),
@@ -36,16 +43,23 @@ export async function generatePkPass(
   const builder = builders[wallet.rules.type]
   if (!builder) throw new Error(`No builder registered for wallet type: ${wallet.rules.type}`)
 
+  // Ensure white text (foreground) has WCAG AA contrast against the brand primary color.
+  // If the brand color is too light, darken it automatically before generating the pass.
+  const safeWallet: Wallet = {
+    ...wallet,
+    primaryColor: ensureWcagContrast(wallet.primaryColor),
+  }
+
   const [passJson, extraAssets] = await Promise.all([
-    builder.buildJson(wallet, pass, recentTransactions),
-    builder.buildAssets(wallet, pass),
+    builder.buildJson(safeWallet, pass, recentTransactions),
+    builder.buildAssets(safeWallet, pass),
   ])
 
   const signerCert = process.env.APPLE_SIGNER_CERT!.replace(/\\n/g, '\n')
   const signerKey = process.env.APPLE_SIGNER_KEY!.replace(/\\n/g, '\n')
   const wwdr = process.env.APPLE_WWDR_CERT!.replace(/\\n/g, '\n')
 
-  const logo = wallet.logoUrl ? await fetchImageBuffer(wallet.logoUrl) : null
+  const logo = safeWallet.logoUrl ? await fetchImageBuffer(safeWallet.logoUrl) : null
   const iconBuf = logo ?? PLACEHOLDER_ICON
 
   const pkpass = new PKPass(

@@ -1,12 +1,33 @@
 import { svgToPng } from '../utils/imageUtils.js'
 import { contrastingColor } from '../utils/colorUtils.js'
+import { PassDesignConfig } from '../PassDesignConfig.js'
+import type { StripGenerator, StripSet } from './StripGenerator.js'
+import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
+import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { StampIcon } from '../../../domain/wallet/entities/WalletRules.js'
+import type { StampsData } from '../../../domain/pass/entities/PassData.js'
+import type { StampsRules } from '../../../domain/wallet/entities/WalletRules.js'
 
-const STRIP_W = 750
-const CIRCLE_R = 38
-const CIRCLE_GAP = 18
+const STRIP_W = PassDesignConfig.strip.width
+const CIRCLE_R = PassDesignConfig.stamps.circleRadius
+const CIRCLE_GAP = PassDesignConfig.stamps.circleGap
 const CIRCLE_STEP = CIRCLE_R * 2 + CIRCLE_GAP
-const PAD_TOP = 48
+const PAD_TOP = PassDesignConfig.stamps.paddingTop
+
+export class StampsStripGenerator implements StripGenerator {
+  async generate(wallet: Wallet, pass: Pass): Promise<StripSet> {
+    const data = pass.data as StampsData
+    const rules = wallet.rules as StampsRules
+    const buf = buildStampsStrip(
+      data.currentStamps,
+      rules.totalStamps,
+      wallet.primaryColor,
+      wallet.accentColor,
+      rules.stampIcon,
+    )
+    return { 'strip.png': buf, 'strip@2x.png': buf, 'strip@3x.png': buf }
+  }
+}
 
 /**
  * Computes a balanced grid layout for N stamps.

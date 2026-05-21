@@ -3,7 +3,6 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { MembershipData } from '../../../domain/pass/entities/PassData.js'
 import type { MembershipRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
 import { txBackFields, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 import { fetchImageBuffer } from '../utils/imageUtils.js'
 
@@ -13,22 +12,21 @@ export class MembershipPassBuilder implements PassBuilder {
     const rules = wallet.rules as MembershipRules
     const data = pass.data as MembershipData
 
-    const expiresValue = data.expiresAt
-      ? formatDate(data.expiresAt)
-      : 'Sin vencimiento'
+    const expiresValue = data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento'
 
     return {
       ...base,
+      // generic pass type is correct for membership — renders with thumbnail support
       generic: {
         primaryFields: [
-          { key: 'level', label: 'Nivel', value: rules.level },
+          { key: 'level', label: 'NIVEL', value: rules.level },
         ],
         secondaryFields: [
-          { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'since', label: 'Miembro desde', value: formatDate(data.memberSince) },
+          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
+          { key: 'since', label: 'MIEMBRO DESDE', value: formatDate(data.memberSince) },
         ],
         auxiliaryFields: [
-          { key: 'expires', label: 'Vigencia', value: expiresValue },
+          { key: 'valid', label: 'VIGENCIA', value: expiresValue },
         ],
         backFields: [
           { key: 'expires_detail', label: 'Vencimiento', value: expiresValue },
@@ -40,8 +38,9 @@ export class MembershipPassBuilder implements PassBuilder {
   }
 
   async buildAssets(wallet: Wallet, pass: Pass): Promise<Record<string, Buffer>> {
-    const assets: Record<string, Buffer> = buildGradientStripSet(wallet.primaryColor, wallet.accentColor)
+    const assets: Record<string, Buffer> = {}
 
+    // generic passes display a thumbnail instead of a strip
     const data = pass.data as MembershipData
     const thumbnailUrl = data.photoUrl ?? wallet.logoUrl
     if (thumbnailUrl) {
