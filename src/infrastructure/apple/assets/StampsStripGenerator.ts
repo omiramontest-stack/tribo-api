@@ -81,16 +81,24 @@ function computeGrid(total: number): { cols: number; rows: number } {
 /**
  * Returns the SVG content to render inside an active stamp circle.
  * All icons are drawn relative to (cx, cy) with the given radius.
+ *
+ * Sizing rules:
+ * - Text glyphs: font-size = r * 0.78 (~40% of circle diameter) — legible without overflowing.
+ * - Path icons: scale s = r / 44 (~14% smaller than the old r/38 base) with vertical re-centering.
+ * - `dominant-baseline="central"` gives the best vertical centering in resvg across all glyphs.
  */
 function renderActiveIcon(icon: StampIcon, cx: number, cy: number, r: number, color: string): string {
-  const fs = Math.round(r * 1.1)
-  const text = (glyph: string, dy = 1) =>
-    `<text x="${cx}" y="${cy + dy}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" font-family="system-ui, -apple-system, sans-serif" fill="${color}" font-weight="700">${glyph}</text>`
+  const fs = Math.round(r * 0.78)
+  // Use dominant-baseline="central" — better than "middle" for resvg's text layout engine.
+  const glyph = (char: string) =>
+    `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" ` +
+    `font-size="${fs}" font-family="system-ui,-apple-system,sans-serif" ` +
+    `fill="${color}" font-weight="700">${char}</text>`
 
   switch (icon) {
-    case 'star':   return text('★', 2)
-    case 'heart':  return text('♥', 2)
-    case 'bolt':   return text('⚡', 1)
+    case 'star':   return glyph('★')
+    case 'heart':  return glyph('♥')
+    case 'bolt':   return glyph('⚡')
     case 'fire':   return renderFire(cx, cy, r, color)
     case 'crown':  return renderCrown(cx, cy, r, color)
     case 'coffee': return renderCoffee(cx, cy, r, color)
@@ -98,70 +106,97 @@ function renderActiveIcon(icon: StampIcon, cx: number, cy: number, r: number, co
     case 'beer':   return renderBeer(cx, cy, r, color)
     case 'paw':    return renderPaw(cx, cy, r, color)
     case 'check':
-    default:       return text('✓', 1)
+    default:       return glyph('✓')
   }
 }
 
 function renderFire(cx: number, cy: number, r: number, color: string): string {
-  const s = r * 0.055
-  const path = `M${cx},${cy - r * 0.7} C${cx + r * 0.3},${cy - r * 0.2} ${cx + r * 0.55},${cy + r * 0.1} ${cx + r * 0.35},${cy + r * 0.7} C${cx + r * 0.15},${cy + r * 0.5} ${cx},${cy + r * 0.3} ${cx - r * 0.15},${cy + r * 0.5} C${cx - r * 0.35},${cy + r * 0.7} ${cx - r * 0.55},${cy + r * 0.1} ${cx},${cy - r * 0.7} Z`
-  return `<path d="${path}" fill="${color}" stroke="none" transform="scale(${s > 0 ? 1 : 1})"/>`
+  // Reduced from r*0.7 to r*0.48 — fits cleanly inside the circle without overflowing.
+  const f = r * 0.48
+  const path =
+    `M${cx},${cy - f} ` +
+    `C${cx + f * 0.43},${cy - f * 0.29} ${cx + f * 0.79},${cy + f * 0.14} ${cx + f * 0.5},${cy + f} ` +
+    `C${cx + f * 0.21},${cy + f * 0.71} ${cx},${cy + f * 0.43} ${cx - f * 0.21},${cy + f * 0.71} ` +
+    `C${cx - f * 0.5},${cy + f} ${cx - f * 0.79},${cy + f * 0.14} ${cx},${cy - f} Z`
+  return `<path d="${path}" fill="${color}"/>`
 }
 
 function renderCrown(cx: number, cy: number, r: number, color: string): string {
-  const top = cy - r * 0.55
-  const bot = cy + r * 0.6
-  const mid = cy - r * 0.05
-  const left = cx - r * 0.65
-  const right = cx + r * 0.65
-  const path = `M${left},${bot} L${left},${mid} L${cx - r * 0.25},${top + r * 0.3} L${cx},${top} L${cx + r * 0.25},${top + r * 0.3} L${right},${mid} L${right},${bot} Z`
+  // Scaled down ~25% (was ±0.65r wide, now ±0.48r) and re-centered vertically.
+  const top = cy - r * 0.40
+  const bot = cy + r * 0.44
+  const mid = cy - r * 0.04
+  const left  = cx - r * 0.48
+  const right = cx + r * 0.48
+  const path =
+    `M${left},${bot} L${left},${mid} ` +
+    `L${cx - r * 0.18},${top + r * 0.22} L${cx},${top} L${cx + r * 0.18},${top + r * 0.22} ` +
+    `L${right},${mid} L${right},${bot} Z`
   return `<path d="${path}" fill="${color}"/>`
 }
 
 function renderCoffee(cx: number, cy: number, r: number, color: string): string {
-  const s = r / 38
-  const bx = cx - 13 * s, by = cy - 8 * s, bw = 26 * s, bh = 22 * s
-  const rx = bx + bw, ry = by + 5 * s
+  // Scale reduced: r/44 (~14% smaller than old r/38).
+  // Centering fix: body top moved from cy-8s to cy-4s so steam+cup spans ≈ cy±18s.
+  const s = r / 44
+  const by = cy - 4 * s           // cup top (re-centered)
+  const bx = cx - 13 * s
+  const bw = 26 * s
+  const bh = 22 * s
+  const hx = bx + bw              // handle start x
+  const hy = by + 5 * s           // handle start y
   const steam1 = `M${cx - 6 * s},${by - 4 * s} Q${cx - 3 * s},${by - 9 * s} ${cx - 6 * s},${by - 14 * s}`
   const steam2 = `M${cx + 2 * s},${by - 4 * s} Q${cx + 5 * s},${by - 9 * s} ${cx + 2 * s},${by - 14 * s}`
   return [
     `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="${4 * s}" fill="${color}"/>`,
-    `<path d="M${rx},${ry} Q${rx + 9 * s},${ry} ${rx + 9 * s},${ry + 6 * s} Q${rx + 9 * s},${ry + 12 * s} ${rx},${ry + 12 * s}" fill="none" stroke="${color}" stroke-width="${3 * s}"/>`,
+    `<path d="M${hx},${hy} Q${hx + 9 * s},${hy} ${hx + 9 * s},${hy + 6 * s} Q${hx + 9 * s},${hy + 12 * s} ${hx},${hy + 12 * s}" fill="none" stroke="${color}" stroke-width="${3 * s}"/>`,
     `<path d="${steam1}" fill="none" stroke="${color}" stroke-width="${2.5 * s}" stroke-linecap="round"/>`,
     `<path d="${steam2}" fill="none" stroke="${color}" stroke-width="${2.5 * s}" stroke-linecap="round"/>`,
   ].join('')
 }
 
 function renderPizza(cx: number, cy: number, r: number, color: string): string {
-  const s = r / 38
-  const path = `M${cx},${cy - 28 * s} L${cx - 24 * s},${cy + 18 * s} L${cx + 24 * s},${cy + 18 * s} Z`
+  // Scale reduced: r/44 (~14% smaller).
+  // Centering fix: triangle was cy-28s to cy+18s (center at cy-5s).
+  // Shifted down 5s → cy-23s to cy+23s (centered at cy).
+  const s = r / 44
+  const top = cy - 23 * s
+  const bot = cy + 23 * s
+  const path = `M${cx},${top} L${cx - 24 * s},${bot} L${cx + 24 * s},${bot} Z`
   return [
     `<path d="${path}" fill="${color}"/>`,
-    `<circle cx="${cx}" cy="${cy + 4 * s}" r="${4 * s}" fill="rgba(0,0,0,0.2)"/>`,
-    `<circle cx="${cx - 10 * s}" cy="${cy - 5 * s}" r="${3.5 * s}" fill="rgba(0,0,0,0.2)"/>`,
-    `<circle cx="${cx + 9 * s}" cy="${cy - 4 * s}" r="${3 * s}" fill="rgba(0,0,0,0.2)"/>`,
+    `<circle cx="${cx}"           cy="${cy + 9 * s}" r="${4   * s}" fill="rgba(0,0,0,0.2)"/>`,
+    `<circle cx="${cx - 10 * s}" cy="${cy          }" r="${3.5 * s}" fill="rgba(0,0,0,0.2)"/>`,
+    `<circle cx="${cx +  9 * s}" cy="${cy +  1 * s}" r="${3   * s}" fill="rgba(0,0,0,0.2)"/>`,
   ].join('')
 }
 
 function renderBeer(cx: number, cy: number, r: number, color: string): string {
-  const s = r / 38
-  const bx = cx - 12 * s, by = cy - 22 * s, bw = 24 * s, bh = 40 * s
+  // Scale reduced: r/44 (~14% smaller).
+  // Centering fix: body was cy-22s to cy+18s (center ≈ cy-4s including foam).
+  // Shifted down 4s → by=cy-18s, body cy-18s to cy+22s (center ≈ cy).
+  const s = r / 44
+  const by = cy - 18 * s
+  const bx = cx - 12 * s
+  const bw = 24 * s
+  const bh = 40 * s
   const foam = `M${bx - 2 * s},${by + 4 * s} Q${cx - 8 * s},${by - 6 * s} ${cx},${by - 4 * s} Q${cx + 8 * s},${by - 6 * s} ${bx + bw + 2 * s},${by + 4 * s} Z`
   return [
     `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="${5 * s}" fill="${color}"/>`,
-    `<path d="M${bx + bw},${by + 6 * s} Q${bx + bw + 10 * s},${by + 6 * s} ${bx + bw + 10 * s},${by + 16 * s} Q${bx + bw + 10 * s},${by + 26 * s} ${bx + bw},${by + 26 * s}" fill="none" stroke="${color}" stroke-width="${3 * s}"/>`,
+    `<path d="M${bx+bw},${by+6*s} Q${bx+bw+10*s},${by+6*s} ${bx+bw+10*s},${by+16*s} Q${bx+bw+10*s},${by+26*s} ${bx+bw},${by+26*s}" fill="none" stroke="${color}" stroke-width="${3 * s}"/>`,
     `<path d="${foam}" fill="rgba(255,255,255,0.6)"/>`,
   ].join('')
 }
 
 function renderPaw(cx: number, cy: number, r: number, color: string): string {
-  const s = r / 38
+  // Scale reduced: r/44 (~14% smaller). Already nearly centered (was cy±~20s range).
+  const s = r / 44
   return [
-    `<ellipse cx="${cx}" cy="${cy + 6 * s}" rx="${13 * s}" ry="${11 * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx - 16 * s}" cy="${cy - 4 * s}" rx="${6 * s}" ry="${8 * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx + 16 * s}" cy="${cy - 4 * s}" rx="${6 * s}" ry="${8 * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx - 7 * s}" cy="${cy - 14 * s}" rx="${5 * s}" ry="${7 * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx + 7 * s}" cy="${cy - 14 * s}" rx="${5 * s}" ry="${7 * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx}"           cy="${cy + 6 * s}"  rx="${13 * s}" ry="${11 * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx - 16 * s}" cy="${cy - 4 * s}"  rx="${6 * s}"  ry="${8  * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx + 16 * s}" cy="${cy - 4 * s}"  rx="${6 * s}"  ry="${8  * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx -  7 * s}" cy="${cy - 14 * s}" rx="${5 * s}"  ry="${7  * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx +  7 * s}" cy="${cy - 14 * s}" rx="${5 * s}"  ry="${7  * s}" fill="${color}"/>`,
   ].join('')
 }
 
