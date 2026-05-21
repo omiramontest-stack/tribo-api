@@ -14,19 +14,50 @@ const CIRCLE_GAP = PassDesignConfig.stamps.circleGap
 const CIRCLE_STEP = CIRCLE_R * 2 + CIRCLE_GAP
 const PAD_TOP = PassDesignConfig.stamps.paddingTop
 
+const BG_W = 540
+const BG_H = 660
+
 export class StampsStripGenerator implements StripGenerator {
   async generate(wallet: Wallet, pass: Pass): Promise<StripSet> {
     const data = pass.data as StampsData
     const rules = wallet.rules as StampsRules
-    const buf = buildStampsStrip(
+    const strip = buildStampsStrip(
       data.currentStamps,
       rules.totalStamps,
       wallet.primaryColor,
       wallet.accentColor,
       rules.stampIcon,
     )
-    return { 'strip.png': buf, 'strip@2x.png': buf, 'strip@3x.png': buf }
+    const bg = renderBackground(wallet.primaryColor, wallet.accentColor)
+    return {
+      'strip.png': strip,
+      'strip@2x.png': strip,
+      'strip@3x.png': strip,
+      'background.png': bg,
+      'background@2x.png': bg,
+      'background@3x.png': bg,
+    }
   }
+}
+
+function renderBackground(primaryColor: string, accentColor: string): Buffer {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BG_W}" height="${BG_H}">
+    <defs>
+      <radialGradient id="main-bloom" cx="100%" cy="0%" r="100%" gradientUnits="objectBoundingBox">
+        <stop offset="0%"   stop-color="${accentColor}" stop-opacity="0.9"/>
+        <stop offset="55%"  stop-color="${accentColor}" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="${accentColor}" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="warm-bloom" cx="0%" cy="100%" r="65%" gradientUnits="objectBoundingBox">
+        <stop offset="0%"   stop-color="${accentColor}" stop-opacity="0.4"/>
+        <stop offset="100%" stop-color="${accentColor}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="${BG_W}" height="${BG_H}" fill="${primaryColor}"/>
+    <rect width="${BG_W}" height="${BG_H}" fill="url(#main-bloom)"/>
+    <rect width="${BG_W}" height="${BG_H}" fill="url(#warm-bloom)"/>
+  </svg>`
+  return svgToPng(svg)
 }
 
 /**
