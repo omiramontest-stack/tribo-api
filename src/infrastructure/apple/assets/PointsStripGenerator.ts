@@ -20,13 +20,22 @@ const H = PassDesignConfig.strip.height   // 288
 // Nosotros solo ponemos el gradiente de fondo + la barra en la zona libre de abajo.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BAR_PAD  = 60
-const BAR_X    = BAR_PAD               // 60
-const BAR_W    = W - BAR_PAD * 2       // 630
-const BAR_H    = 18
-const BAR_R    = 9
-const BAR_TOP  = 228                   // ~114pt — bien dentro de la zona libre
-const LBL_Y    = 260                   // etiquetas "0" y threshold bajo la barra
+// Recuadro semi-transparente (el "container" visual del strip)
+// Empieza en y=192 — por debajo de donde Apple renderiza el primaryField "1"
+const CTR_X = 30
+const CTR_Y = 192
+const CTR_W = W - CTR_X * 2           // 690
+const CTR_H = 82                       // 192+82 = 274 (deja 14px de respiro al pie)
+const CTR_R = 14
+
+// Barra dentro del recuadro
+const BAR_PAD = 24                     // padding lateral dentro del recuadro
+const BAR_X   = CTR_X + BAR_PAD       // 54
+const BAR_W   = CTR_W - BAR_PAD * 2   // 642
+const BAR_H   = 16
+const BAR_R   = 8
+const BAR_TOP = CTR_Y + 28            // 220 — centrado vertical en el recuadro
+const LBL_Y   = CTR_Y + 58            // 250 — etiquetas "0" y threshold
 
 // Background blurred @3x  (Apple la oscurece/difumina)
 const BG_W = 540
@@ -89,12 +98,18 @@ function buildPointsStrip(
       </linearGradient>
     </defs>
 
-    <!-- Fondo gradiente de la marca (cubre todo el strip) -->
+    <!-- Fondo gradiente de la marca -->
     <rect width="${W}" height="${H}" fill="url(#grad)"/>
 
-    <!-- Barra de progreso — zona libre (y=228, por debajo de los primaryFields de Apple) -->
+    <!-- Recuadro semi-transparente — por debajo del "1" que Apple renderiza arriba -->
+    <rect x="${CTR_X}" y="${CTR_Y}" width="${CTR_W}" height="${CTR_H}"
+          rx="${CTR_R}" fill="rgba(255,255,255,0.15)"/>
+
+    <!-- Barra de progreso: track -->
     <rect x="${BAR_X}" y="${BAR_TOP}" width="${BAR_W}" height="${BAR_H}"
           rx="${BAR_R}" fill="${barTrack}"/>
+
+    <!-- Barra de progreso: relleno -->
     ${fillRect}
 
     <!-- Etiquetas 0 / max bajo la barra -->
