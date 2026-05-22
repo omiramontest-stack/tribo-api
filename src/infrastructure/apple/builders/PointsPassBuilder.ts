@@ -10,27 +10,39 @@ export class PointsPassBuilder implements PassBuilder {
   constructor(private readonly stripGenerator: StripGenerator) {}
 
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
-    const base = buildBasePassJson(wallet, pass)
-    const rules = wallet.rules as PointsRules
-    const data = pass.data as PointsData
+    const base      = buildBasePassJson(wallet, pass)
+    const rules     = wallet.rules as PointsRules
+    const data      = pass.data   as PointsData
     const remaining = Math.max(0, rules.rewardThreshold - data.currentPoints)
 
     return {
       ...base,
       storeCard: {
-        // headerFields vacíos — el número de puntos ya aparece grande en el strip image
-        headerFields: [],
-        // Sin primaryFields: se renderizan ENCIMA del strip.png y taparían la
-        // visualización de puntos + barra de progreso que está en el strip.
-        secondaryFields: [
-          { key: 'holder', label: 'NOMBRE', value: fullName(pass.firstName, pass.lastName) },
+        // headerFields: puntos en la esquina superior derecha junto al logo.
+        // Siempre visibles — NO se tapan por el strip.png.
+        headerFields: [
+          { key: 'points', label: 'PUNTOS', value: String(data.currentPoints) },
         ],
-        auxiliaryFields: [],
+
+        // Sin primaryFields: el strip.png (barra de progreso) llena esa zona visual.
+        // Agregar primaryFields encima del strip los haría solaparse.
+
+        secondaryFields: [
+          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
+          {
+            key:   'next',
+            label: 'PARA TU PRÓXIMA RECOMPENSA',
+            value: remaining > 0
+              ? `Faltan ${remaining} ${rules.pointsLabel}`
+              : '¡Listo para canjear!',
+          },
+        ],
+
         backFields: [
-          { key: 'threshold', label: `${rules.pointsLabel} necesarios`, value: String(rules.rewardThreshold) },
-          { key: 'current', label: `${rules.pointsLabel} acumulados`, value: String(data.currentPoints) },
-          { key: 'remaining', label: `${rules.pointsLabel} restantes`, value: String(remaining) },
-          { key: 'reward', label: 'Recompensa', value: rules.reward },
+          { key: 'threshold', label: `${rules.pointsLabel} necesarios`,  value: String(rules.rewardThreshold) },
+          { key: 'current',   label: `${rules.pointsLabel} acumulados`,  value: String(data.currentPoints) },
+          { key: 'remaining', label: `${rules.pointsLabel} restantes`,   value: String(remaining) },
+          { key: 'reward',    label: 'Recompensa',                        value: rules.reward },
           ...txBackFields(txs),
         ],
       },

@@ -11,56 +11,38 @@ export class CashbackPassBuilder implements PassBuilder {
     const rules = wallet.rules as CashbackRules
     const data  = pass.data   as CashbackData
 
-    // Formatea el saldo con la moneda explícita (e.g. "MXN 42.50")
     const balanceFormatted = `${rules.currency} ${data.balance.toFixed(2)}`
-    const rateLabel        = `${rules.cashbackPercent}% por cada compra`
 
     return {
       ...base,
       storeCard: {
-        // headerFields: porcentaje de cashback en la esquina superior derecha (junto al logo)
+        // header: porcentaje en la esquina superior derecha junto al logo
         headerFields: [
           { key: 'rate', label: 'CASHBACK', value: `${rules.cashbackPercent}%` },
         ],
 
-        // Sin primaryFields → sin imagen de strip grande ni texto overlay gigante.
-        // El balance pasa a secondaryFields para una tipografía más contenida.
-        secondaryFields: [
-          {
-            key:   'balance',
-            label: 'SALDO CASHBACK',
-            value: balanceFormatted,
-          },
-          {
-            key:   'holder',
-            label: 'TITULAR',
-            value: fullName(pass.firstName, pass.lastName),
-          },
+        // primaryFields: Apple los renderiza con tipografía grande (~38pt).
+        // Sin strip.png no hay imagen que los tape, por lo que se ven completos.
+        primaryFields: [
+          { key: 'balance', label: 'SALDO CASHBACK', value: balanceFormatted },
         ],
 
-        auxiliaryFields: [
-          { key: 'rule', label: 'BENEFICIO', value: rateLabel },
+        secondaryFields: [
+          { key: 'holder', label: 'TITULAR',       value: fullName(pass.firstName, pass.lastName) },
+          { key: 'rule',   label: 'POR CADA COMPRA', value: `${rules.cashbackPercent}% de regreso` },
         ],
 
         backFields: [
-          {
-            key:   'info',
-            label: 'Cómo funciona',
-            value: `Acumulas ${rules.cashbackPercent}% de cashback en cada compra.`,
-          },
-          {
-            key:   'balance_detail',
-            label: 'Saldo actual',
-            value: balanceFormatted,
-          },
+          { key: 'info',    label: 'Cómo funciona', value: `Acumulas ${rules.cashbackPercent}% de cashback en cada compra.` },
+          { key: 'balance_detail', label: 'Saldo actual', value: balanceFormatted },
           ...txBackFields(txs),
         ],
       },
     }
   }
 
-  // Sin strip/banner — el pass usa el backgroundColor del wallet directamente.
-  // Apple Wallet aplica el color sólido como fondo; el diseño queda limpio y legible.
+  // Sin strip — el backgroundColor del wallet llena el fondo limpiamente.
+  // Los primaryFields se renderizan sobre el color sólido, sin conflicto con imágenes.
   async buildAssets(_wallet: Wallet, _pass: Pass): Promise<Record<string, Buffer>> {
     return {}
   }

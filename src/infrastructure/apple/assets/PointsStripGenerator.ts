@@ -11,35 +11,40 @@ import type { PointsRules } from '../../../domain/wallet/entities/WalletRules.js
 const W = PassDesignConfig.strip.width    // 750
 const H = PassDesignConfig.strip.height   // 288
 
-// Contenedor interior semi-transparente
-const CTR_X = 40
-const CTR_Y = 24
-const CTR_W = W - CTR_X * 2              // 670
-const CTR_H = H - CTR_Y * 2              // 240
-const CTR_R = 20
+// El header de Apple Wallet (logo + headerFields) cubre los primeros ~120px del strip.
+// SAFE_TOP marca el límite inferior de esa zona opaca: nada visible arriba de aquí.
+const SAFE_TOP = 120
 
-// Barra de progreso (márgenes horizontales dentro del contenedor)
-const BAR_PAD = 40                        // padding lateral de la barra
-const BAR_X   = CTR_X + BAR_PAD          // 80
-const BAR_W   = CTR_W - BAR_PAD * 2      // 590
-const BAR_H   = 12
-const BAR_R   = 6
+// Contenedor interior semi-transparente (caja redondeada visual)
+const CTR_X = 30
+const CTR_Y = SAFE_TOP - 2               // 118 — empieza justo al borde del header
+const CTR_W = W - CTR_X * 2             // 690
+const CTR_H = H - CTR_Y - 8             // 162 — deja 8px de respiro abajo
+const CTR_R = 16
+
+// Barra de progreso (dentro del contenedor con padding lateral)
+const BAR_PAD = 50
+const BAR_X   = CTR_X + BAR_PAD         // 80
+const BAR_W   = CTR_W - BAR_PAD * 2     // 590
+const BAR_H   = 14
+const BAR_R   = 7
 
 /**
- * Posiciones verticales del layout (centros de cada elemento).
+ * Layout vertical en zona segura (y=120 → y=288, 168px disponibles).
+ * Diseño idéntico al screenshot de referencia, bajado ~78px para evitar
+ * el overlay del header de Apple.
  *
- * Verificación anti-solapamiento:
- *   - Label  24px → rango y ≈ [56, 80]
- *   - Número 68px → rango y ≈ [108, 176]    (centro 142)
- *   - Barra  12px → rango y ≈ [192, 204]     (top 192)
- *   - Caption22px → rango y ≈ [229, 251]     (centro 240)
- *   - Contenedor bottom = CTR_Y + CTR_H = 264
- *   Todo dentro de 264 ✓, sin solapamientos ✓
+ *  LABEL_CY    136  → "TUS PUNTOS"  (22px)   visual: 125–147
+ *  NUMBER_CY   178  → número grande (60px)    visual: 153–203
+ *  BAR_TOP     216  → barra         (14px)    visual: 216–230
+ *  BAR_LABEL_Y 248  → "0" / max    (18px)    visual: 239–257
+ *  CAPTION_CY  272  → caption       (20px)    visual: 262–282
  */
-const LABEL_CY   = CTR_Y + 44            // 68  — etiqueta "TUS PUNTOS"
-const NUMBER_CY  = CTR_Y + 118           // 142 — número grande
-const BAR_TOP    = CTR_Y + 168           // 192 — inicio de la barra
-const CAPTION_CY = CTR_Y + 216          // 240 — texto de puntos restantes
+const LABEL_CY    = SAFE_TOP + 16        // 136
+const NUMBER_CY   = SAFE_TOP + 58        // 178
+const BAR_TOP     = SAFE_TOP + 96        // 216
+const BAR_LABEL_Y = SAFE_TOP + 128       // 248
+const CAPTION_CY  = SAFE_TOP + 152       // 272
 
 // Background blurred @3x  (Apple la oscurece/difumina)
 const BG_W = 540
@@ -83,13 +88,12 @@ function buildPointsStrip(
   primaryColor: string,
   accentColor: string,
 ): Buffer {
-  const palette      = stripPalette(primaryColor)
+  const palette       = stripPalette(primaryColor)
   const progressRatio = threshold > 0 ? Math.min(1, current / threshold) : 0
-  const fillW        = Math.round(BAR_W * progressRatio)
-  const remaining    = Math.max(0, threshold - current)
+  const fillW         = Math.round(BAR_W * progressRatio)
+  const remaining     = Math.max(0, threshold - current)
 
-  const captionLabel = pointsLabel.toUpperCase()
-  const captionText  = remaining > 0
+  const captionText = remaining > 0
     ? `${remaining} ${pointsLabel} para: ${reward}`
     : '¡Listo para canjear!'
 
@@ -107,20 +111,20 @@ function buildPointsStrip(
       </linearGradient>
     </defs>
 
-    <!-- Fondo con gradiente -->
+    <!-- Fondo con gradiente de la marca -->
     <rect width="${W}" height="${H}" fill="url(#grad)"/>
 
-    <!-- Contenedor interior -->
+    <!-- Contenedor interior (caja semi-transparente redondeada) -->
     <rect x="${CTR_X}" y="${CTR_Y}" width="${CTR_W}" height="${CTR_H}"
           rx="${CTR_R}" fill="${palette.container}"/>
 
-    <!-- Etiqueta: "TUS PUNTOS" -->
+    <!-- Etiqueta "TUS PUNTOS" centrada -->
     <text x="${W / 2}" y="${LABEL_CY}"
           text-anchor="middle" dominant-baseline="central"
-          font-size="24" font-weight="600" letter-spacing="1.5"
-          ${font} fill="${palette.textMuted}">${captionLabel}</text>
+          font-size="22" font-weight="600" letter-spacing="2"
+          ${font} fill="${palette.textMuted}">TUS PUNTOS</text>
 
-    <!-- Número grande de puntos -->
+    <!-- Número grande de puntos (la estrella del strip) -->
     <text x="${W / 2}" y="${NUMBER_CY}"
           text-anchor="middle" dominant-baseline="central"
           font-size="68" font-weight="700"
@@ -133,10 +137,20 @@ function buildPointsStrip(
     <!-- Barra de progreso: relleno -->
     ${fillRect}
 
-    <!-- Texto de puntos restantes -->
+    <!-- Etiquetas de mínimo y máximo bajo la barra -->
+    <text x="${BAR_X}" y="${BAR_LABEL_Y}"
+          dominant-baseline="central"
+          font-size="18" font-weight="400"
+          ${font} fill="${palette.textFaint}">0</text>
+    <text x="${BAR_X + BAR_W}" y="${BAR_LABEL_Y}"
+          text-anchor="end" dominant-baseline="central"
+          font-size="18" font-weight="400"
+          ${font} fill="${palette.textFaint}">${threshold}</text>
+
+    <!-- Caption: "X puntos para: Recompensa" -->
     <text x="${W / 2}" y="${CAPTION_CY}"
           text-anchor="middle" dominant-baseline="central"
-          font-size="22" font-weight="400"
+          font-size="20" font-weight="400"
           ${font} fill="${palette.textMuted}">${captionText}</text>
   </svg>`)
 }
