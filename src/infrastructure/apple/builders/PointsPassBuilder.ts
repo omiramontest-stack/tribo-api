@@ -18,23 +18,22 @@ export class PointsPassBuilder implements PassBuilder {
     return {
       ...base,
       storeCard: {
-        // headerFields: puntos en la esquina superior derecha junto al logo.
-        // Siempre visibles — NO se tapan por el strip.png.
-        headerFields: [
-          { key: 'points', label: 'PUNTOS', value: String(data.currentPoints) },
+        // primaryFields: Apple los renderiza en tipografía grande directamente
+        // sobre el strip.png — siempre visibles, nunca tapados por el header.
+        // Reemplaza al número grande que antes estábamos intentando dibujar en el SVG.
+        primaryFields: [
+          { key: 'pts', label: 'PUNTOS', value: String(data.currentPoints) },
         ],
 
-        // Sin primaryFields: el strip.png (barra de progreso) llena esa zona visual.
-        // Agregar primaryFields encima del strip los haría solaparse.
+        // El strip.png muestra solo el gradiente + barra de progreso en la zona baja.
+        // No necesita mostrar el número; Apple ya lo renderiza en primaryFields.
 
         secondaryFields: [
-          { key: 'holder', label: 'TITULAR', value: fullName(pass.firstName, pass.lastName) },
+          { key: 'holder', label: 'NOMBRE',           value: fullName(pass.firstName, pass.lastName) },
           {
             key:   'next',
-            label: 'PARA TU PRÓXIMA RECOMPENSA',
-            value: remaining > 0
-              ? `Faltan ${remaining} ${rules.pointsLabel}`
-              : '¡Listo para canjear!',
+            label: 'PUNTOS FALTANTES',
+            value: remaining > 0 ? `${remaining} puntos` : '¡Listo para canjear!',
           },
         ],
 

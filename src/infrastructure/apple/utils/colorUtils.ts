@@ -67,7 +67,11 @@ export function iconColorOnWhite(primaryColor: string): string {
  * so text and UI elements are always legible regardless of the brand color chosen.
  */
 export function stripPalette(primaryColor: string) {
-  const isLight = hexLuminance(primaryColor) > 0.179
+  // WCAG AA: white text needs 4.5:1 contrast → background luminance must be ≤ 0.1833.
+  // We use white ink when the background is dark enough, dark ink otherwise.
+  // This aligns with ensureWcagContrast which guarantees the primaryColor sent to
+  // generators is always dark enough for white text (ratio ≥ 4.5).
+  const isLight = hexLuminance(primaryColor) > 0.1833
   const rgb = isLight ? '26,26,26' : '255,255,255'
   return {
     /** Solid text color (titles, numbers). */
