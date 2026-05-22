@@ -19,15 +19,20 @@ export class PointsPassBuilder implements PassBuilder {
       ...base,
       storeCard: {
         // headerFields: esquina superior derecha junto al logo.
-        // Muestra la meta de recompensa para dar contexto visual inmediato.
         headerFields: [
           { key: 'meta', label: 'META', value: `${rules.rewardThreshold} pts` },
         ],
 
-        // Sin primaryFields: el SVG del strip dibuja el número y la etiqueta
-        // "PUNTOS" con posicionamiento y centrado completos.
-        // Apple no respeta textAlignment en primaryFields de storeCard, por lo
-        // que mover la UI al SVG es la única forma de garantizar el centrado.
+        // primaryFields: Apple los renderiza con tipografía grande sobre el strip.
+        // PKTextAlignmentCenter centra el valor horizontalmente en la tarjeta.
+        primaryFields: [
+          {
+            key:           'pts',
+            label:         'PUNTOS',
+            value:         String(data.currentPoints),
+            textAlignment: 'PKTextAlignmentCenter',
+          },
+        ],
 
         secondaryFields: [
           { key: 'holder', label: 'NOMBRE',           value: fullName(pass.firstName, pass.lastName) },
