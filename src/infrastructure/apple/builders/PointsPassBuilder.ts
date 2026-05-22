@@ -22,7 +22,7 @@ export class PointsPassBuilder implements PassBuilder {
         // sobre el strip.png — siempre visibles, nunca tapados por el header.
         // Reemplaza al número grande que antes estábamos intentando dibujar en el SVG.
         primaryFields: [
-          { key: 'pts', label: 'PUNTOS', value: String(data.currentPoints) },
+          { key: 'pts', label: 'PUNTOS', value: String(data.currentPoints), textAlignment: 'PKTextAlignmentCenter' },
         ],
 
         // El strip.png muestra solo el gradiente + barra de progreso en la zona baja.
