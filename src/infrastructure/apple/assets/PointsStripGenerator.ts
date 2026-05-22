@@ -20,22 +20,24 @@ const H = PassDesignConfig.strip.height   // 288
 // Nosotros solo ponemos el gradiente de fondo + la barra en la zona libre de abajo.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Recuadro semi-transparente (el "container" visual del strip)
-// Empieza en y=192 — por debajo de donde Apple renderiza el primaryField "1"
+// Recuadro semi-transparente — empieza justo después del header (logo) de Apple,
+// envuelve visualmente tanto el "1" que Apple renderiza como la barra.
+// El header/logo ocupa ~88px; el recuadro arranca ahí para que "1" quede DENTRO.
 const CTR_X = 30
-const CTR_Y = 192
+const CTR_Y = 88
 const CTR_W = W - CTR_X * 2           // 690
-const CTR_H = 82                       // 192+82 = 274 (deja 14px de respiro al pie)
-const CTR_R = 14
+const CTR_H = 186                      // 88+186 = 274 (deja 14px de respiro al pie)
+const CTR_R = 16
 
-// Barra dentro del recuadro
-const BAR_PAD = 24                     // padding lateral dentro del recuadro
-const BAR_X   = CTR_X + BAR_PAD       // 54
-const BAR_W   = CTR_W - BAR_PAD * 2   // 642
+// Barra dentro del recuadro — posicionada por DEBAJO de donde Apple pinta el "1"
+// (Apple renderiza primaryFields en aprox. y=100–190; barra va desde y=206)
+const BAR_PAD = 28
+const BAR_X   = CTR_X + BAR_PAD       // 58
+const BAR_W   = CTR_W - BAR_PAD * 2   // 634
 const BAR_H   = 16
 const BAR_R   = 8
-const BAR_TOP = CTR_Y + 28            // 220 — centrado vertical en el recuadro
-const LBL_Y   = CTR_Y + 58            // 250 — etiquetas "0" y threshold
+const BAR_TOP = CTR_Y + 118           // 206 — debajo del "1" renderizado por Apple
+const LBL_Y   = CTR_Y + 152           // 240 — etiquetas "0" y threshold
 
 // Background blurred @3x  (Apple la oscurece/difumina)
 const BG_W = 540

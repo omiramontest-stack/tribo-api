@@ -18,6 +18,12 @@ export class PointsPassBuilder implements PassBuilder {
     return {
       ...base,
       storeCard: {
+        // headerFields: esquina superior derecha junto al logo.
+        // Muestra la meta de recompensa para dar contexto visual inmediato.
+        headerFields: [
+          { key: 'meta', label: 'META', value: `${rules.rewardThreshold} pts` },
+        ],
+
         // primaryFields: Apple los renderiza en tipografía grande directamente
         // sobre el strip.png — siempre visibles, nunca tapados por el header.
         // Reemplaza al número grande que antes estábamos intentando dibujar en el SVG.
