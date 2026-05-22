@@ -24,15 +24,10 @@ export class PointsPassBuilder implements PassBuilder {
           { key: 'meta', label: 'META', value: `${rules.rewardThreshold} pts` },
         ],
 
-        // primaryFields: Apple los renderiza en tipografía grande directamente
-        // sobre el strip.png — siempre visibles, nunca tapados por el header.
-        // Reemplaza al número grande que antes estábamos intentando dibujar en el SVG.
-        primaryFields: [
-          { key: 'pts', label: 'PUNTOS', value: String(data.currentPoints), textAlignment: 'PKTextAlignmentCenter' },
-        ],
-
-        // El strip.png muestra solo el gradiente + barra de progreso en la zona baja.
-        // No necesita mostrar el número; Apple ya lo renderiza en primaryFields.
+        // Sin primaryFields: el SVG del strip dibuja el número y la etiqueta
+        // "PUNTOS" con posicionamiento y centrado completos.
+        // Apple no respeta textAlignment en primaryFields de storeCard, por lo
+        // que mover la UI al SVG es la única forma de garantizar el centrado.
 
         secondaryFields: [
           { key: 'holder', label: 'NOMBRE',           value: fullName(pass.firstName, pass.lastName) },

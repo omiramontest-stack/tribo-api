@@ -11,35 +11,39 @@ const W = PassDesignConfig.strip.width    // 750
 const H = PassDesignConfig.strip.height   // 288
 
 // ─── Zonas del storeCard ───────────────────────────────────────────────────
-// Apple Wallet renderiza así en storeCard con strip:
-//   y =   0 – ~88px  → header overlay (logo + headerFields)    — nuestro SVG queda oculto
-//   y =  88 – ~220px → primaryFields text (Apple lo renderiza) — nuestro SVG es solo fondo
-//   y = 220 – 288px  → zona libre: aquí vive nuestra barra     — VISIBLE y no conflicta
+// Apple Wallet renderiza en storeCard con strip.png:
+//   y =   0 –  88px → logo (top-left) + headerFields (top-right) — solapan nuestro SVG
+//   y =  88 – 288px → zona libre — nuestro contenido aquí
 //
-// El número de puntos viaja en primaryFields → Apple lo dibuja grande sobre el strip.
-// Nosotros solo ponemos el gradiente de fondo + la barra en la zona libre de abajo.
+// Dibujamos TODA la UI en el SVG: recuadro, etiqueta "PUNTOS", número grande,
+// barra de progreso y etiquetas 0/threshold.
+//
+// NO usamos primaryFields en el JSON del pass:
+//   - Apple no respeta textAlignment en primaryFields de storeCard.
+//   - El control total de posición y centrado solo es posible en el SVG.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Recuadro semi-transparente — empieza justo después del header (logo) de Apple,
-// envuelve visualmente tanto el "1" que Apple renderiza como la barra.
-// El header/logo ocupa ~88px; el recuadro arranca ahí para que "1" quede DENTRO.
+// Recuadro contenedor (empieza justo debajo del header/logo de Apple)
 const CTR_X = 30
-const CTR_Y = 88
-const CTR_W = W - CTR_X * 2           // 690
-const CTR_H = 186                      // 88+186 = 274 (deja 14px de respiro al pie)
-const CTR_R = 16
+const CTR_Y = 92              // ~4px de margen tras el área del logo (~88px)
+const CTR_W = W - CTR_X * 2  // 690
+const CTR_H = 182             // 92 + 182 = 274 (14px al pie del strip)
+const CTR_R = 14
 
-// Barra dentro del recuadro — posicionada por DEBAJO de donde Apple pinta el "1"
-// (Apple renderiza primaryFields en aprox. y=100–190; barra va desde y=206)
+// Elementos centrados en x = W/2 = 375
+const LABEL_Y  = 122   // centro de la etiqueta "PUNTOS"  (font-size 22)
+const NUMBER_Y = 180   // centro del número grande         (font-size 72)
+
+// Barra de progreso
 const BAR_PAD = 28
-const BAR_X   = CTR_X + BAR_PAD       // 58
-const BAR_W   = CTR_W - BAR_PAD * 2   // 634
-const BAR_H   = 16
-const BAR_R   = 8
-const BAR_TOP = CTR_Y + 118           // 206 — debajo del "1" renderizado por Apple
-const LBL_Y   = CTR_Y + 152           // 240 — etiquetas "0" y threshold
+const BAR_X   = CTR_X + BAR_PAD        // 58
+const BAR_W   = CTR_W - BAR_PAD * 2    // 634
+const BAR_H   = 14
+const BAR_R   = 7
+const BAR_TOP = 226   // 10px debajo del borde inferior del número
+const LBL_Y   = 250   // centro de las etiquetas "0" y threshold
 
-// Background blurred @3x  (Apple la oscurece/difumina)
+// Background blurred @3x  (Apple la difumina sobre el resto del card)
 const BG_W = 540
 const BG_H = 660
 
@@ -78,12 +82,15 @@ function buildPointsStrip(
   const progressRatio = threshold > 0 ? Math.min(1, current / threshold) : 0
   const fillW         = Math.round(BAR_W * progressRatio)
 
-  // Siempre blanco: ensureWcagContrast garantiza que primaryColor es suficientemente
-  // oscuro (ratio ≥ 4.5:1) para que el texto blanco sea legible.
-  const white      = '#FFFFFF'
-  const barTrack   = 'rgba(255,255,255,0.25)'
-  const barFill    = 'rgba(255,255,255,0.92)'
-  const labelColor = 'rgba(255,255,255,0.60)'
+  // Siempre blanco: ensureWcagContrast garantiza que primaryColor es oscuro
+  // (ratio ≥ 4.5:1), por lo que el blanco siempre es legible.
+  const white           = '#FFFFFF'
+  const containerFill   = 'rgba(255,255,255,0.15)'
+  const containerStroke = 'rgba(255,255,255,0.35)'
+  const labelColor      = 'rgba(255,255,255,0.70)'
+  const barTrack        = 'rgba(255,255,255,0.25)'
+  const barFill         = 'rgba(255,255,255,0.92)'
+  const barLabelColor   = 'rgba(255,255,255,0.55)'
 
   const fillRect = fillW > 0
     ? `<rect x="${BAR_X}" y="${BAR_TOP}" width="${fillW}" height="${BAR_H}"
@@ -91,6 +98,7 @@ function buildPointsStrip(
     : ''
 
   const font = `font-family="system-ui,-apple-system,sans-serif"`
+  const cx   = W / 2   // 375 — centro horizontal del strip
 
   return svgToPng(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
@@ -103,25 +111,38 @@ function buildPointsStrip(
     <!-- Fondo gradiente de la marca -->
     <rect width="${W}" height="${H}" fill="url(#grad)"/>
 
-    <!-- Recuadro semi-transparente — por debajo del "1" que Apple renderiza arriba -->
+    <!-- Recuadro con borde sutil que delimita el área de puntos -->
     <rect x="${CTR_X}" y="${CTR_Y}" width="${CTR_W}" height="${CTR_H}"
-          rx="${CTR_R}" fill="rgba(255,255,255,0.15)"/>
+          rx="${CTR_R}" fill="${containerFill}"
+          stroke="${containerStroke}" stroke-width="1.5"/>
+
+    <!-- Etiqueta "PUNTOS" centrada dentro del recuadro -->
+    <text x="${cx}" y="${LABEL_Y}"
+          text-anchor="middle" dominant-baseline="middle"
+          font-size="22" font-weight="600" letter-spacing="2"
+          ${font} fill="${labelColor}">PUNTOS</text>
+
+    <!-- Número grande centrado — protagonista visual del pass -->
+    <text x="${cx}" y="${NUMBER_Y}"
+          text-anchor="middle" dominant-baseline="middle"
+          font-size="72" font-weight="700"
+          ${font} fill="${white}">${current}</text>
 
     <!-- Barra de progreso: track -->
     <rect x="${BAR_X}" y="${BAR_TOP}" width="${BAR_W}" height="${BAR_H}"
           rx="${BAR_R}" fill="${barTrack}"/>
 
-    <!-- Barra de progreso: relleno -->
+    <!-- Barra de progreso: relleno dinámico -->
     ${fillRect}
 
-    <!-- Etiquetas 0 / max bajo la barra -->
+    <!-- Etiquetas 0 / threshold bajo la barra -->
     <text x="${BAR_X}" y="${LBL_Y}"
-          dominant-baseline="central" font-size="20" font-weight="500"
-          ${font} fill="${labelColor}">0</text>
+          dominant-baseline="middle" font-size="18" font-weight="500"
+          ${font} fill="${barLabelColor}">0</text>
     <text x="${BAR_X + BAR_W}" y="${LBL_Y}"
-          text-anchor="end" dominant-baseline="central"
-          font-size="20" font-weight="500"
-          ${font} fill="${labelColor}">${threshold}</text>
+          text-anchor="end" dominant-baseline="middle"
+          font-size="18" font-weight="500"
+          ${font} fill="${barLabelColor}">${threshold}</text>
   </svg>`)
 }
 
