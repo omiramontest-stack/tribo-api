@@ -21,6 +21,9 @@ const H = PassDesignConfig.strip.height   // 288
 // NO usamos primaryFields en el JSON del pass:
 //   - Apple no respeta textAlignment en primaryFields de storeCard.
 //   - El control total de posición y centrado solo es posible en el SVG.
+//
+// IMPORTANTE: resvg requiere dominant-baseline="central", NO "middle".
+// (ver StampsStripGenerator: "better than middle for resvg's text layout engine")
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Recuadro contenedor (empieza justo debajo del header/logo de Apple)
@@ -97,8 +100,9 @@ function buildPointsStrip(
              rx="${BAR_R}" fill="${barFill}"/>`
     : ''
 
-  const font = `font-family="system-ui,-apple-system,sans-serif"`
-  const cx   = W / 2   // 375 — centro horizontal del strip
+  // BlinkMacSystemFont incluido para garantizar carga en macOS/iOS
+  const ff = `font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif"`
+  const cx = W / 2   // 375 — centro horizontal del strip
 
   return svgToPng(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
@@ -117,16 +121,24 @@ function buildPointsStrip(
           stroke="${containerStroke}" stroke-width="1.5"/>
 
     <!-- Etiqueta "PUNTOS" centrada dentro del recuadro -->
-    <text x="${cx}" y="${LABEL_Y}"
-          text-anchor="middle" dominant-baseline="middle"
-          font-size="22" font-weight="600" letter-spacing="2"
-          ${font} fill="${labelColor}">PUNTOS</text>
+    <text
+      x="${cx}" y="${LABEL_Y}"
+      text-anchor="middle"
+      dominant-baseline="central"
+      font-size="22"
+      font-weight="600"
+      ${ff}
+      fill="${labelColor}">PUNTOS</text>
 
     <!-- Número grande centrado — protagonista visual del pass -->
-    <text x="${cx}" y="${NUMBER_Y}"
-          text-anchor="middle" dominant-baseline="middle"
-          font-size="72" font-weight="700"
-          ${font} fill="${white}">${current}</text>
+    <text
+      x="${cx}" y="${NUMBER_Y}"
+      text-anchor="middle"
+      dominant-baseline="central"
+      font-size="72"
+      font-weight="700"
+      ${ff}
+      fill="${white}">${current}</text>
 
     <!-- Barra de progreso: track -->
     <rect x="${BAR_X}" y="${BAR_TOP}" width="${BAR_W}" height="${BAR_H}"
@@ -136,13 +148,21 @@ function buildPointsStrip(
     ${fillRect}
 
     <!-- Etiquetas 0 / threshold bajo la barra -->
-    <text x="${BAR_X}" y="${LBL_Y}"
-          dominant-baseline="middle" font-size="18" font-weight="500"
-          ${font} fill="${barLabelColor}">0</text>
-    <text x="${BAR_X + BAR_W}" y="${LBL_Y}"
-          text-anchor="end" dominant-baseline="middle"
-          font-size="18" font-weight="500"
-          ${font} fill="${barLabelColor}">${threshold}</text>
+    <text
+      x="${BAR_X}" y="${LBL_Y}"
+      dominant-baseline="central"
+      font-size="18"
+      font-weight="500"
+      ${ff}
+      fill="${barLabelColor}">0</text>
+    <text
+      x="${BAR_X + BAR_W}" y="${LBL_Y}"
+      text-anchor="end"
+      dominant-baseline="central"
+      font-size="18"
+      font-weight="500"
+      ${ff}
+      fill="${barLabelColor}">${threshold}</text>
   </svg>`)
 }
 
