@@ -12,7 +12,6 @@ import { DaypassPassBuilder } from './builders/DaypassPassBuilder.js'
 import { BundlePassBuilder } from './builders/BundlePassBuilder.js'
 import { GiftCardPassBuilder } from './builders/GiftCardPassBuilder.js'
 import { CouponPassBuilder } from './builders/CouponPassBuilder.js'
-import { GradientStripGenerator } from './assets/GradientStripGenerator.js'
 import { StampsStripGenerator } from './assets/StampsStripGenerator.js'
 import { PointsStripGenerator } from './assets/PointsStripGenerator.js'
 import { fetchImageBuffer, PLACEHOLDER_ICON } from './utils/imageUtils.js'
@@ -22,15 +21,14 @@ import type { RecentTransaction } from './utils/passFieldUtils.js'
 export type { RecentTransaction }
 
 // Strip generators son stateless — se instancian una sola vez y se comparten.
-const gradientGenerator = new GradientStripGenerator()
 const stampsGenerator = new StampsStripGenerator()
 const pointsGenerator = new PointsStripGenerator()
 
 const builders: Record<WalletType, PassBuilder> = {
-  stamps: new StampsPassBuilder(stampsGenerator),
+  stamps:     new StampsPassBuilder(stampsGenerator),
   membership: new MembershipPassBuilder(),
-  points: new PointsPassBuilder(pointsGenerator),
-  cashback: new CashbackPassBuilder(gradientGenerator),
+  points:     new PointsPassBuilder(pointsGenerator),
+  cashback:   new CashbackPassBuilder(),   // sin strip — usa backgroundColor del pass
   daypass: new DaypassPassBuilder(),
   bundle: new BundlePassBuilder(),
   giftcard: new GiftCardPassBuilder(),
