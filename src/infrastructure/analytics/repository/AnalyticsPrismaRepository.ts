@@ -12,6 +12,7 @@ import type {
   WalletInsights,
   EventBreakdownItem,
 } from '../../../domain/analytics/repository/AnalyticsRepository.js'
+import { localDateKey, localDateKeyNDaysAgo } from '../utils/tzDate.js'
 
 const SCAN_TYPES: PassEventType[] = ['stamp_added', 'stamp_redeemed', 'points_added', 'points_redeemed', 'cashback_added', 'cashback_redeemed', 'membership_renewed', 'daypass_scanned', 'bundle_used', 'giftcard_credited', 'giftcard_redeemed', 'coupon_redeemed']
 const REDEEM_TYPES: PassEventType[] = ['stamp_redeemed', 'points_redeemed', 'cashback_redeemed', 'bundle_used', 'giftcard_redeemed', 'coupon_redeemed']
@@ -65,10 +66,10 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
 
     const map = new Map<string, number>()
     for (let i = days - 1; i >= 0; i--) {
-      map.set(new Date(Date.now() - i * MS_PER_DAY).toISOString().slice(0, 10), 0)
+      map.set(localDateKeyNDaysAgo(i), 0)
     }
     for (const e of events) {
-      const key = e.createdAt.toISOString().slice(0, 10)
+      const key = localDateKey(e.createdAt)
       map.set(key, (map.get(key) ?? 0) + 1)
     }
 
@@ -207,10 +208,10 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
 
     const map = new Map<string, number>()
     for (let i = days - 1; i >= 0; i--) {
-      map.set(new Date(Date.now() - i * MS_PER_DAY).toISOString().slice(0, 10), 0)
+      map.set(localDateKeyNDaysAgo(i), 0)
     }
     for (const e of events) {
-      const key = e.createdAt.toISOString().slice(0, 10)
+      const key = localDateKey(e.createdAt)
       map.set(key, (map.get(key) ?? 0) + 1)
     }
 
@@ -228,6 +229,7 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
     const passCountMap = new Map<string, number>()
 
     for (const e of events) {
+      // getHours() / getDay() use the process timezone (TZ=America/Mexico_City)
       const h = e.createdAt.getHours()
       hourMap.set(h, (hourMap.get(h) ?? 0) + 1)
 

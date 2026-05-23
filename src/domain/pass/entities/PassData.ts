@@ -1,6 +1,7 @@
 export interface StampsData {
   type: 'stamps'
   currentStamps: number
+  expiresAt?: string | null
 }
 
 export interface MembershipData {
@@ -13,11 +14,13 @@ export interface MembershipData {
 export interface PointsData {
   type: 'points'
   currentPoints: number
+  expiresAt?: string | null
 }
 
 export interface CashbackData {
   type: 'cashback'
   balance: number
+  expiresAt?: string | null
 }
 
 export interface DaypassData {
@@ -28,12 +31,14 @@ export interface DaypassData {
 export interface BundleData {
   type: 'bundle'
   remainingUses: number
+  expiresAt?: string | null
 }
 
 export interface GiftCardData {
   type: 'giftcard'
   initialBalance: number
   currentBalance: number
+  expiresAt?: string | null
 }
 
 export interface CouponData {

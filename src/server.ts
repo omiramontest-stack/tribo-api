@@ -1,4 +1,6 @@
 import 'dotenv/config'
+// dotenv must be the very first import so that TZ (and all env vars) are
+// set before any Date operations or subsequent module initialisation.
 import { validateEnv } from './config/env.js'
 import { buildApp } from './http/app.js'
 

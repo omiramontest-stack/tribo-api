@@ -80,28 +80,30 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
   let points = { balance: { string: '0' }, label: 'Puntos' }
   let secondaryText = ''
 
+  function fmtExpiry(expiresAt?: string | null): string {
+    return expiresAt ? `Vence: ${new Date(expiresAt).toLocaleDateString('es-MX')}` : 'Sin vencimiento'
+  }
+
   if (rules.type === 'stamps' && data.type === 'stamps') {
     const r = rules as StampsRules
     const d = data as StampsData
     points = { balance: { string: `${d.currentStamps} / ${r.totalStamps}` }, label: 'Sellos' }
-    secondaryText = `Recompensa: ${r.reward}`
+    secondaryText = `Recompensa: ${r.reward} · ${fmtExpiry(d.expiresAt)}`
   } else if (rules.type === 'points' && data.type === 'points') {
     const r = rules as PointsRules
     const d = data as PointsData
     points = { balance: { string: String(d.currentPoints) }, label: r.pointsLabel }
-    secondaryText = `Recompensa a los ${r.rewardThreshold} puntos`
+    secondaryText = `Recompensa a los ${r.rewardThreshold} puntos · ${fmtExpiry(d.expiresAt)}`
   } else if (rules.type === 'membership' && data.type === 'membership') {
     const r = rules as MembershipRules
     const d = data as MembershipData
     points = { balance: { string: r.level }, label: 'Nivel' }
-    secondaryText = d.expiresAt
-      ? `Vence: ${new Date(d.expiresAt).toLocaleDateString('es-MX')}`
-      : 'Sin vencimiento'
+    secondaryText = fmtExpiry(d.expiresAt)
   } else if (rules.type === 'cashback' && data.type === 'cashback') {
     const r = rules as CashbackRules
     const d = data as CashbackData
     points = { balance: { string: `${r.currency} ${d.balance.toFixed(2)}` }, label: 'Saldo cashback' }
-    secondaryText = `Cashback: ${r.cashbackPercent}% por compra`
+    secondaryText = `Cashback: ${r.cashbackPercent}% por compra · ${fmtExpiry(d.expiresAt)}`
   } else if (rules.type === 'daypass' && data.type === 'daypass') {
     const r = rules as DaypassRules
     const _d = data as DaypassData
@@ -111,18 +113,18 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
     const r = rules as BundleRules
     const d = data as BundleData
     points = { balance: { string: `${d.remainingUses} / ${r.totalUses}` }, label: r.label }
-    secondaryText = `Usos restantes: ${d.remainingUses}`
+    secondaryText = `Usos restantes: ${d.remainingUses} · ${fmtExpiry(d.expiresAt)}`
   } else if (rules.type === 'giftcard' && data.type === 'giftcard') {
     const r = rules as GiftCardRules
     const d = data as GiftCardData
     points = { balance: { string: `${r.currency} ${d.currentBalance.toFixed(2)}` }, label: 'Saldo disponible' }
-    secondaryText = `Saldo inicial: ${r.currency} ${d.initialBalance.toFixed(2)}`
+    secondaryText = `Saldo inicial: ${r.currency} ${d.initialBalance.toFixed(2)} · ${fmtExpiry(d.expiresAt)}`
   } else if (rules.type === 'coupon' && data.type === 'coupon') {
     const r = rules as CouponRules
     const d = data as CouponData
     const discountLabel = r.discountType === 'percent' ? `${r.discount}%` : `${r.currency ?? ''} ${r.discount}`
     points = { balance: { string: discountLabel }, label: 'Descuento' }
-    secondaryText = d.used ? 'Cupón usado' : (d.expiresAt ? `Vence: ${new Date(d.expiresAt).toLocaleDateString('es-MX')}` : 'Sin vencimiento')
+    secondaryText = d.used ? 'Cupón usado' : fmtExpiry(d.expiresAt)
   }
 
   return {

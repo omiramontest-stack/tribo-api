@@ -4,7 +4,7 @@ import type { PointsData } from '../../../domain/pass/entities/PassData.js'
 import type { PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import type { StripGenerator } from '../assets/StripGenerator.js'
-import { txBackFields, fullName, type RecentTransaction } from '../utils/passFieldUtils.js'
+import { txBackFields, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class PointsPassBuilder implements PassBuilder {
   constructor(private readonly stripGenerator: StripGenerator) {}
@@ -48,6 +48,7 @@ export class PointsPassBuilder implements PassBuilder {
           { key: 'current',   label: `${rules.pointsLabel} acumulados`,  value: String(data.currentPoints) },
           { key: 'remaining', label: `${rules.pointsLabel} restantes`,   value: String(remaining) },
           { key: 'reward',    label: 'Recompensa',                        value: rules.reward },
+          { key: 'expires',   label: 'Vencimiento',                       value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
           ...txBackFields(txs),
         ],
       },

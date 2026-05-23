@@ -7,7 +7,7 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { PassData } from '../../../domain/pass/entities/PassData.js'
 import type { UseCase } from '../../common/UseCase.js'
 import type { GeneratePassDto } from '../dto/GeneratePassDto.js'
-import type { MembershipRules, BundleRules, GiftCardRules, CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { MembershipRules, StampsRules, PointsRules, CashbackRules, BundleRules, GiftCardRules, CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { AppError } from '../../common/AppError.js'
 
 export class GeneratePassUseCase implements UseCase<GeneratePassDto, Pass> {
@@ -30,33 +30,34 @@ export class GeneratePassUseCase implements UseCase<GeneratePassDto, Pass> {
     const now = new Date().toISOString()
     let data: PassData
 
+    function calcExpiry(days: number | null): string | null {
+      return days ? new Date(Date.now() + days * 86400000).toISOString() : null
+    }
+
     const type = wallet.type
     if (type === 'stamps') {
-      data = { type: 'stamps', currentStamps: 0 }
+      const rules = wallet.rules as StampsRules
+      data = { type: 'stamps', currentStamps: 0, expiresAt: calcExpiry(rules.expiresInDays) }
     } else if (type === 'points') {
-      data = { type: 'points', currentPoints: 0 }
+      const rules = wallet.rules as PointsRules
+      data = { type: 'points', currentPoints: 0, expiresAt: calcExpiry(rules.expiresInDays) }
     } else if (type === 'cashback') {
-      data = { type: 'cashback', balance: 0 }
+      const rules = wallet.rules as CashbackRules
+      data = { type: 'cashback', balance: 0, expiresAt: calcExpiry(rules.expiresInDays) }
     } else if (type === 'daypass') {
       data = { type: 'daypass', used: false }
     } else if (type === 'bundle') {
       const rules = wallet.rules as BundleRules
-      data = { type: 'bundle', remainingUses: rules.totalUses }
+      data = { type: 'bundle', remainingUses: rules.totalUses, expiresAt: calcExpiry(rules.expiresInDays) }
     } else if (type === 'giftcard') {
       const rules = wallet.rules as GiftCardRules
-      data = { type: 'giftcard', initialBalance: rules.initialBalance, currentBalance: rules.initialBalance }
+      data = { type: 'giftcard', initialBalance: rules.initialBalance, currentBalance: rules.initialBalance, expiresAt: calcExpiry(rules.expiresInDays) }
     } else if (type === 'coupon') {
       const rules = wallet.rules as CouponRules
-      const expiresAt = rules.expiresInDays
-        ? new Date(Date.now() + rules.expiresInDays * 86400000).toISOString()
-        : null
-      data = { type: 'coupon', used: false, expiresAt }
+      data = { type: 'coupon', used: false, expiresAt: calcExpiry(rules.expiresInDays) }
     } else {
       const rules = wallet.rules as MembershipRules
-      const expiresAt = rules.expiresInDays
-        ? new Date(Date.now() + rules.expiresInDays * 86400000).toISOString()
-        : null
-      data = { type: 'membership', memberSince: now, expiresAt, photoUrl: dto.photoUrl ?? null }
+      data = { type: 'membership', memberSince: now, expiresAt: calcExpiry(rules.expiresInDays), photoUrl: dto.photoUrl ?? null }
     }
 
     const pass: Pass = {

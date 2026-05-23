@@ -3,7 +3,7 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { CashbackData } from '../../../domain/pass/entities/PassData.js'
 import type { CashbackRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { txBackFields, fullName, type RecentTransaction } from '../utils/passFieldUtils.js'
+import { txBackFields, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class CashbackPassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
@@ -28,13 +28,15 @@ export class CashbackPassBuilder implements PassBuilder {
         ],
 
         secondaryFields: [
-          { key: 'holder', label: 'TITULAR',       value: fullName(pass.firstName, pass.lastName) },
-          { key: 'rule',   label: 'POR CADA COMPRA', value: `${rules.cashbackPercent}% de regreso` },
+          { key: 'holder',  label: 'TITULAR',         value: fullName(pass.firstName, pass.lastName) },
+          { key: 'rule',    label: 'POR CADA COMPRA',  value: `${rules.cashbackPercent}% de regreso` },
+          { key: 'expires', label: 'VENCIMIENTO',      value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
         ],
 
         backFields: [
-          { key: 'info',    label: 'Cómo funciona', value: `Acumulas ${rules.cashbackPercent}% de cashback en cada compra.` },
-          { key: 'balance_detail', label: 'Saldo actual', value: balanceFormatted },
+          { key: 'info',           label: 'Cómo funciona', value: `Acumulas ${rules.cashbackPercent}% de cashback en cada compra.` },
+          { key: 'balance_detail', label: 'Saldo actual',  value: balanceFormatted },
+          { key: 'expires_detail', label: 'Vencimiento',   value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
           ...txBackFields(txs),
         ],
       },

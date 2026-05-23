@@ -4,7 +4,7 @@ import type { BundleData } from '../../../domain/pass/entities/PassData.js'
 import type { BundleRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
-import { fullName } from '../utils/passFieldUtils.js'
+import { fullName, formatDate } from '../utils/passFieldUtils.js'
 
 export class BundlePassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass): object {
@@ -23,13 +23,15 @@ export class BundlePassBuilder implements PassBuilder {
           { key: 'of', label: 'De un total de', value: `${rules.totalUses} ${rules.label}` },
         ],
         secondaryFields: [
-          { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'used', label: 'Utilizados', value: String(used) },
+          { key: 'name',    label: 'Titular',    value: fullName(pass.firstName, pass.lastName) },
+          { key: 'used',    label: 'Utilizados', value: String(used) },
+          { key: 'expires', label: 'VENCIMIENTO', value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
         ],
         backFields: [
-          { key: 'info', label: 'Cómo usar', value: `Presenta este código QR para consumir uno de tus ${rules.label}.` },
-          { key: 'total', label: 'Total original', value: `${rules.totalUses} ${rules.label}` },
-          { key: 'used_detail', label: 'Ya utilizados', value: String(used) },
+          { key: 'info',           label: 'Cómo usar',     value: `Presenta este código QR para consumir uno de tus ${rules.label}.` },
+          { key: 'total',          label: 'Total original', value: `${rules.totalUses} ${rules.label}` },
+          { key: 'used_detail',    label: 'Ya utilizados',  value: String(used) },
+          { key: 'expires_detail', label: 'Vencimiento',    value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
         ],
       },
     }

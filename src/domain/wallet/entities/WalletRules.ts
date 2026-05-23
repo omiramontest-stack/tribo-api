@@ -5,6 +5,7 @@ export interface StampsRules {
   totalStamps: number
   reward: string
   stampIcon?: StampIcon
+  expiresInDays: number | null
 }
 
 export interface MembershipRules {
@@ -18,12 +19,14 @@ export interface PointsRules {
   pointsLabel: string
   reward: string
   rewardThreshold: number
+  expiresInDays: number | null
 }
 
 export interface CashbackRules {
   type: 'cashback'
   cashbackPercent: number
   currency: string
+  expiresInDays: number | null
 }
 
 export interface DaypassRules {
@@ -38,12 +41,14 @@ export interface BundleRules {
   type: 'bundle'
   totalUses: number
   label: string
+  expiresInDays: number | null
 }
 
 export interface GiftCardRules {
   type: 'giftcard'
   initialBalance: number
   currency: string
+  expiresInDays: number | null
 }
 
 export interface CouponRules {
