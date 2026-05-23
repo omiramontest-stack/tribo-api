@@ -66,7 +66,7 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
              COUNT(*)::bigint AS count
       FROM "PassEvent"
       WHERE "organizationId" = ${organizationId}
-        AND "type" = ANY(${SCAN_TYPES}::text[])
+        AND "type"::text = ANY(${SCAN_TYPES}::text[])
         AND "createdAt" >= ${since}
         AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
       GROUP BY day
@@ -214,7 +214,7 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
              COUNT(*)::bigint AS count
       FROM "PassEvent"
       WHERE "walletId" = ${walletId}
-        AND "type" = ANY(${SCAN_TYPES}::text[])
+        AND "type"::text = ANY(${SCAN_TYPES}::text[])
         AND "createdAt" >= ${since}
         AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
       GROUP BY day
@@ -243,7 +243,7 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
                COUNT(*)::bigint AS count
         FROM "PassEvent"
         WHERE "walletId" = ${walletId}
-          AND "type" = ANY(${SCAN_TYPES}::text[])
+          AND "type"::text = ANY(${SCAN_TYPES}::text[])
           AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
         GROUP BY hour
         ORDER BY count DESC
@@ -255,7 +255,7 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
                COUNT(*)::bigint AS count
         FROM "PassEvent"
         WHERE "walletId" = ${walletId}
-          AND "type" = ANY(${SCAN_TYPES}::text[])
+          AND "type"::text = ANY(${SCAN_TYPES}::text[])
           AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
         GROUP BY dow
         ORDER BY count DESC
@@ -267,7 +267,7 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
         FROM "PassEvent" e
         JOIN "Pass" p ON p.id = e."passId" AND p."deletedAt" IS NULL
         WHERE e."walletId" = ${walletId}
-          AND e."type" = ANY(${SCAN_TYPES}::text[])
+          AND e."type"::text = ANY(${SCAN_TYPES}::text[])
         GROUP BY e."passId", p."firstName", p."lastName"
         ORDER BY "eventCount" DESC
         LIMIT 10`,
