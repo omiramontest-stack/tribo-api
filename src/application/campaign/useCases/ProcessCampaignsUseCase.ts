@@ -13,10 +13,11 @@ export class ProcessCampaignsUseCase {
   ) {}
 
   async run(): Promise<void> {
-    const campaigns = await this._campaignRepository.findDueCampaigns()
+    // claimDueCampaigns() hace SELECT FOR UPDATE SKIP LOCKED + UPDATE status='sending'
+    // en una sola transacción, garantizando que ningún otro worker tome la misma campaña.
+    const campaigns = await this._campaignRepository.claimDueCampaigns()
 
     for (const campaign of campaigns) {
-      await this._campaignRepository.updateStatus(campaign.id, 'sending')
 
       let totalSent = 0
       let totalFailed = 0
@@ -24,10 +25,6 @@ export class ProcessCampaignsUseCase {
       while (true) {
         const recipients = await this._campaignRepository.findPendingRecipients(campaign.id, BATCH_SIZE)
         if (recipients.length === 0) break
-
-        const availableSmsCredits = campaign.channel === 'sms'
-          ? await this._billingRepository.findSmsCreditsByOrg(campaign.organizationId)
-          : null
 
         const results = await Promise.allSettled(
           recipients.map(async (recipient) => {
@@ -50,7 +47,10 @@ export class ProcessCampaignsUseCase {
                 await this._campaignRepository.markRecipientSkipped(recipient.id)
                 return 'skipped'
               }
-              if ((availableSmsCredits ?? 0) < segments) {
+              // Deducción atómica: UPDATE con WHERE balance >= segments.
+              // Si devuelve false, el balance era insuficiente — sin race condition posible.
+              const deducted = await this._billingRepository.tryDeductSmsCredits(campaign.organizationId, segments)
+              if (!deducted) {
                 await this._campaignRepository.markRecipientFailed(recipient.id, 'insufficient_sms_credits')
                 return 'failed'
               }
@@ -61,7 +61,6 @@ export class ProcessCampaignsUseCase {
                 passUrl: recipient.variables.passUrl,
                 passToken: recipient.variables.passToken,
               })
-              await this._billingRepository.deductSmsCredits(campaign.organizationId, segments)
               await this._campaignRepository.markRecipientSent(recipient.id)
               return 'sent'
             }

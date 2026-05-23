@@ -16,34 +16,63 @@ function planAllows(plan: Plan, feature: PlanFeature): boolean {
 const GRACE_PERIOD_DAYS = 5
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
+/** Cache en-proceso con TTL de 60s para el plan activo por organización.
+ *  Evita 2 queries a DB en cada endpoint protegido.
+ *  El webhook de Stripe invalida la entrada al actualizar la suscripción. */
+interface CacheEntry { plan: Plan | null; expiresAt: number }
+const planCache = new Map<string, CacheEntry>()
+const PLAN_CACHE_TTL_MS = 60_000
+
+function getCachedPlan(orgId: string): Plan | null | undefined {
+  const entry = planCache.get(orgId)
+  if (!entry) return undefined
+  if (Date.now() > entry.expiresAt) { planCache.delete(orgId); return undefined }
+  return entry.plan
+}
+
+function setCachedPlan(orgId: string, plan: Plan | null): void {
+  planCache.set(orgId, { plan, expiresAt: Date.now() + PLAN_CACHE_TTL_MS })
+}
+
+/** Invalida el cache de plan para una organización (llamar desde el webhook de Stripe). */
+export function invalidatePlanCache(orgId: string): void {
+  planCache.delete(orgId)
+}
+
 export function createPlanGuard(billingRepo: BillingRepository) {
   async function getActivePlan(organizationId: string): Promise<Plan | null> {
+    const cached = getCachedPlan(organizationId)
+    if (cached !== undefined) return cached
+
     const subscription = await billingRepo.findSubscriptionByOrg(organizationId)
-    if (!subscription) return null
+    if (!subscription) { setCachedPlan(organizationId, null); return null }
 
     const plans = await billingRepo.findAllActivePlans()
     const now = new Date()
 
+    let result: Plan | null = null
+
     if (subscription.status === 'active') {
-      return plans.find(p => p.id === subscription.planId) ?? null
-    }
-
-    if (subscription.status === 'trialing') {
+      result = plans.find(p => p.id === subscription.planId) ?? null
+    } else if (subscription.status === 'trialing') {
       const trialValid = subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > now
-      return trialValid ? (plans.find(p => p.id === subscription.planId) ?? null) : null
-    }
-
-    if (subscription.status === 'cancelled' || subscription.status === 'past_due') {
+      result = trialValid ? (plans.find(p => p.id === subscription.planId) ?? null) : null
+    } else if (subscription.status === 'cancelled' || subscription.status === 'past_due') {
       if (subscription.cancelledAt) {
         const daysSinceCancelled = (now.getTime() - new Date(subscription.cancelledAt).getTime()) / MS_PER_DAY
         if (daysSinceCancelled <= GRACE_PERIOD_DAYS) {
-          return plans.find(p => p.id === subscription.planId) ?? null
+          result = plans.find(p => p.id === subscription.planId) ?? null
+        } else {
+          result = plans.find(p => p.slug === 'trial') ?? null
         }
+      } else {
+        // past_due sin cancelledAt: mantener el plan durante la gracia implícita
+        result = plans.find(p => p.id === subscription.planId) ?? null
       }
-      return plans.find(p => p.slug === 'trial') ?? null
     }
 
-    return null
+    setCachedPlan(organizationId, result)
+    return result
   }
 
   function requireSubscription() {

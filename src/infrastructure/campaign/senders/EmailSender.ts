@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import type { ISender, SendPayload } from './ISender.js'
+import { logger } from '../../logger/logger.js'
 
 export class EmailSender implements ISender {
   private readonly _resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
@@ -7,7 +8,7 @@ export class EmailSender implements ISender {
 
   async send(payload: SendPayload): Promise<void> {
     if (!this._resend) {
-      console.log(`[EmailSender] Not configured — skipping email to ${payload.to}`)
+      logger.warn({ to: payload.to }, '[EmailSender] not configured — skipping')
       return
     }
 

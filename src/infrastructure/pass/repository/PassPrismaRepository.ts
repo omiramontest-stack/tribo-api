@@ -13,6 +13,12 @@ export class PassPrismaRepository implements PassRepository {
     return row ? this._toEntity(row) : null
   }
 
+  async findByTokenAndAuthToken(token: string, authToken: string): Promise<Pass | null> {
+    const row = await this._db.pass.findUnique({ where: { token, deletedAt: null } })
+    if (!row || row.authToken !== authToken) return null
+    return this._toEntity(row)
+  }
+
   async countByOrganizationId(organizationId: string): Promise<number> {
     return this._db.pass.count({
       where: { wallet: { organizationId }, deletedAt: null },
@@ -45,6 +51,7 @@ export class PassPrismaRepository implements PassRepository {
         id: pass.id,
         walletId: pass.walletId,
         token: pass.token,
+        authToken: pass.authToken,
         firstName: pass.firstName,
         lastName: pass.lastName,
         phone: pass.phone,
@@ -71,11 +78,32 @@ export class PassPrismaRepository implements PassRepository {
     return this._toEntity(row)
   }
 
+  async findPushTokensByPassToken(passToken: string): Promise<string[]> {
+    const rows = await this._db.deviceRegistration.findMany({
+      where: { passToken },
+      select: { pushToken: true },
+    })
+    return rows.map(r => r.pushToken)
+  }
+
+  async findPushTokensByPassTokens(passTokens: string[]): Promise<Map<string, string>> {
+    const rows = await this._db.deviceRegistration.findMany({
+      where: { passToken: { in: passTokens } },
+      select: { passToken: true, pushToken: true },
+    })
+    const map = new Map<string, string>()
+    for (const r of rows) {
+      map.set(r.passToken, r.pushToken)
+    }
+    return map
+  }
+
   private _toEntity(row: PrismaPass): Pass {
     return {
       id: row.id,
       walletId: row.walletId,
       token: row.token,
+      authToken: row.authToken,
       firstName: row.firstName,
       lastName: row.lastName,
       phone: row.phone,

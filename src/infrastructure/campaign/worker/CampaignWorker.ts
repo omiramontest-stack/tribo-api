@@ -1,4 +1,5 @@
 import type { ProcessCampaignsUseCase } from '../../../application/campaign/useCases/ProcessCampaignsUseCase.js'
+import { logger } from '../../logger/logger.js'
 
 export interface IWorker {
   start(): void
@@ -17,14 +18,14 @@ export class CampaignWorker implements IWorker {
   start(): void {
     if (this._timer) return
     this._timer = setInterval(() => { void this._tick() }, this._intervalMs)
-    console.log(`[CampaignWorker] started — polling every ${this._intervalMs}ms`)
+    logger.info({ intervalMs: this._intervalMs }, '[CampaignWorker] started')
   }
 
   stop(): void {
     if (this._timer) {
       clearInterval(this._timer)
       this._timer = null
-      console.log('[CampaignWorker] stopped')
+      logger.info('[CampaignWorker] stopped')
     }
   }
 
@@ -34,7 +35,7 @@ export class CampaignWorker implements IWorker {
     try {
       await this._processUseCase.run()
     } catch (err) {
-      console.error('[CampaignWorker] error during tick:', err)
+      logger.error({ err }, '[CampaignWorker] error during tick')
     } finally {
       this._running = false
     }

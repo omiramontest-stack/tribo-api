@@ -110,15 +110,31 @@ export class CampaignPrismaRepository implements CampaignRepository {
     return toPaginatedResult(rows.map(toCampaign), total, pagination)
   }
 
-  async findDueCampaigns(): Promise<Campaign[]> {
-    const rows = await this._db.campaign.findMany({
-      where: {
-        status: { in: ['scheduled', 'sending'] },
-        scheduledAt: { lte: new Date() },
-        deletedAt: null,
-      },
+  async claimDueCampaigns(): Promise<Campaign[]> {
+    // SELECT FOR UPDATE SKIP LOCKED garantiza que dos workers concurrentes
+    // no procesen la misma campaña. La transacción marca el status en 'sending'
+    // antes de devolver las filas, haciendo el claim atómico.
+    const claimed = await this._db.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Campaign"
+        WHERE status IN ('scheduled', 'sending')
+          AND "scheduledAt" <= NOW()
+          AND "deletedAt" IS NULL
+        FOR UPDATE SKIP LOCKED
+        LIMIT 10`
+
+      if (rows.length === 0) return []
+
+      const ids = rows.map(r => r.id)
+      await tx.campaign.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'sending' },
+      })
+
+      return tx.campaign.findMany({ where: { id: { in: ids } } })
     })
-    return rows.map(toCampaign)
+
+    return claimed.map(toCampaign)
   }
 
   async saveRecipients(recipients: CampaignRecipient[]): Promise<void> {

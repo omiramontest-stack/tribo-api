@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto'
-import type { PrismaClient } from '@prisma/client'
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
 import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
@@ -31,7 +30,6 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
   constructor(
     private readonly _walletRepository: WalletRepository,
     private readonly _passRepository: PassRepository,
-    private readonly _db: PrismaClient,
     private readonly _orgRepository: OrganizationRepository,
     private readonly _cashbackTransactionRepository: CashbackTransactionRepository,
     private readonly _passEventRepository: PassEventRepository,
@@ -116,11 +114,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     dto: UpdatePassDataDto,
     result: ActionResult,
   ): Promise<void> {
-    const registrations = await this._db.deviceRegistration.findMany({
-      where: { passToken: pass.token },
-      select: { pushToken: true },
-    })
-    const pushTokens = registrations.map((r: { pushToken: string }) => r.pushToken)
+    const pushTokens = await this._passRepository.findPushTokensByPassToken(pass.token)
 
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),

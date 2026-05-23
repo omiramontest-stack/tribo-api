@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto'
-import type { PrismaClient } from '@prisma/client'
 import type { CampaignRepository } from '../../../domain/campaign/repository/CampaignRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
+import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
 import type { SegmentResolverService } from '../services/SegmentResolverService.js'
 import type { CampaignRecipient } from '../../../domain/campaign/entities/CampaignRecipient.js'
 import { buildVariables } from '../services/TemplateEngine.js'
@@ -22,8 +22,8 @@ export class ScheduleCampaignUseCase {
     private readonly _campaignRepository: CampaignRepository,
     private readonly _orgRepository: OrganizationRepository,
     private readonly _walletRepository: WalletRepository,
+    private readonly _passRepository: PassRepository,
     private readonly _segmentResolver: SegmentResolverService,
-    private readonly _db: PrismaClient,
   ) {}
 
   async run(dto: ScheduleCampaignDto): Promise<void> {
@@ -45,36 +45,48 @@ export class ScheduleCampaignUseCase {
     const org = await this._orgRepository.findById(dto.organizationId)
     const orgName = org?.name ?? ''
 
-    const recipients: CampaignRecipient[] = await Promise.all(
-      passes.map(async (pass) => {
-        const wallet = pass.walletId
-          ? (await this._walletRepository.findById(pass.walletId)) ?? { businessName: '', rules: {}, type: 'stamps' as const, id: '', organizationId: '', primaryColor: '', accentColor: '', description: '', logoUrl: null, createdAt: '', deletedAt: null }
-          : { businessName: '', rules: {}, type: 'stamps' as const, id: '', organizationId: '', primaryColor: '', accentColor: '', description: '', logoUrl: null, createdAt: '', deletedAt: null }
-
-        let pushToken: string | null = null
-        if (campaign.channel === 'wallet_push') {
-          const reg = await this._db.deviceRegistration.findFirst({
-            where: { passToken: pass.token },
-            select: { pushToken: true },
-          })
-          pushToken = reg?.pushToken ?? null
-        }
-
-        return {
-          id: randomUUID(),
-          campaignId: campaign.id,
-          passId: pass.id,
-          phone: pass.phone,
-          email: pass.email ?? null,
-          pushToken,
-          variables: buildVariables(pass, wallet as Parameters<typeof buildVariables>[1], orgName),
-          status: 'pending' as const,
-          sentAt: null,
-          error: null,
-          createdAt: new Date().toISOString(),
-        }
+    // ── Cargar wallets en batch (1 query por walletId único, no 1 por pass) ──────
+    const uniqueWalletIds = [...new Set(passes.map(p => p.walletId).filter(Boolean))]
+    const walletMap = new Map<string, Parameters<typeof buildVariables>[1]>()
+    await Promise.all(
+      uniqueWalletIds.map(async (wid) => {
+        const w = await this._walletRepository.findById(wid)
+        if (w) walletMap.set(wid, w)
       }),
     )
+    const emptyWallet: Parameters<typeof buildVariables>[1] = {
+      businessName: '',
+      rules: { type: 'stamps', totalStamps: 0, reward: '', expiresInDays: null },
+      type: 'stamps' as const,
+      id: '', organizationId: '', primaryColor: '', accentColor: '',
+      description: '', logoUrl: null, createdAt: '', deletedAt: null,
+    }
+
+    // ── Cargar push tokens en batch (1 sola query IN, no 1 por pass) ────────────
+    const pushTokenMap = campaign.channel === 'wallet_push'
+      ? await this._passRepository.findPushTokensByPassTokens(passes.map(p => p.token))
+      : new Map<string, string>()
+
+    const recipients: CampaignRecipient[] = passes.map((pass) => {
+      const wallet = walletMap.get(pass.walletId) ?? emptyWallet
+      const pushToken = campaign.channel === 'wallet_push'
+        ? (pushTokenMap.get(pass.token) ?? null)
+        : null
+
+      return {
+        id: randomUUID(),
+        campaignId: campaign.id,
+        passId: pass.id,
+        phone: pass.phone,
+        email: pass.email ?? null,
+        pushToken,
+        variables: buildVariables(pass, wallet, orgName),
+        status: 'pending' as const,
+        sentAt: null,
+        error: null,
+        createdAt: new Date().toISOString(),
+      }
+    })
 
     for (let i = 0; i < recipients.length; i += CHUNK_SIZE) {
       await this._campaignRepository.saveRecipients(recipients.slice(i, i + CHUNK_SIZE))

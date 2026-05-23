@@ -52,6 +52,7 @@ import { SendPassLinkUseCase } from '../application/pass/useCases/SendPassLinkUs
 import { SendPassWhatsAppUseCase } from '../application/pass/useCases/SendPassWhatsAppUseCase.js'
 import { WhatsAppSessionManager } from '../infrastructure/whatsapp/WhatsAppSessionManager.js'
 import { WhatsAppCleanupWorker } from '../infrastructure/whatsapp/WhatsAppCleanupWorker.js'
+import { SseTokenStore } from '../infrastructure/whatsapp/SseTokenStore.js'
 import { whatsappRoutes } from './routes/whatsapp.routes.js'
 import { RedeemDownloadTokenUseCase } from '../application/pass/useCases/RedeemDownloadTokenUseCase.js'
 import { ValidateDownloadTokenUseCase } from '../application/pass/useCases/ValidateDownloadTokenUseCase.js'
@@ -104,6 +105,7 @@ import cookiesPlugin from './plugins/cookies.js'
 import corsPlugin from './plugins/cors.js'
 import rateLimitPlugin from './plugins/rateLimit.js'
 import securityPlugin from './plugins/security.js'
+import traceIdPlugin from './plugins/traceId.js'
 import { authRoutes } from './routes/auth.routes.js'
 import { organizationRoutes } from './routes/organization.routes.js'
 import { walletRoutes } from './routes/wallet.routes.js'
@@ -115,6 +117,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const app = Fastify({ logger: true })
 
   await app.register(securityPlugin)
+  await app.register(traceIdPlugin)
   await app.register(cookiesPlugin)
   await app.register(corsPlugin)
   await app.register(rateLimitPlugin)
@@ -137,7 +140,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const loginUseCase = new LoginUseCase(authRepo)
   const registerUseCase = new RegisterUseCase(authRepo)
   const googleAuthUseCase = new GoogleAuthUseCase(authRepo)
-  const onboardingUseCase = new OnboardingUseCase(orgRepo, createTrial, prisma)
+  const onboardingUseCase = new OnboardingUseCase(orgRepo, billingRepo, createTrial)
   const sendVerificationEmail = new SendVerificationEmailUseCase(authRepo)
   const verifyEmail = new VerifyEmailUseCase(authRepo)
   const requestEmailChange = new RequestEmailChangeUseCase(authRepo)
@@ -166,13 +169,14 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const generatePass = new GeneratePassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
   const getPassByToken = new GetPassByTokenUseCase(walletRepo, passRepo)
   const getPassesByWallet = new GetPassesByWalletUseCase(passRepo, walletRepo, orgRepo)
-  const updatePassData = new UpdatePassDataUseCase(walletRepo, passRepo, prisma, orgRepo, cashbackTransactionRepo, passEventRepo)
+  const updatePassData = new UpdatePassDataUseCase(walletRepo, passRepo, orgRepo, cashbackTransactionRepo, passEventRepo)
   const deletePass = new DeletePassUseCase(passRepo, walletRepo, orgRepo, passEventRepo)
   const scanDaypass = new ScanDaypassUseCase(passRepo, walletRepo, passEventRepo)
   const getScannedDaypasses = new GetScannedDaypassesUseCase(passRepo, walletRepo, orgRepo)
   const sendPassLink = new SendPassLinkUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo)
   const whatsappManager = new WhatsAppSessionManager(prisma)
   const whatsappCleanup = new WhatsAppCleanupWorker(prisma)
+  const sseTokenStore = new SseTokenStore()
   const sendPassWhatsApp = new SendPassWhatsAppUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo, whatsappManager)
   const redeemDownloadToken = new RedeemDownloadTokenUseCase(passDownloadTokenRepo)
   const validateDownloadToken = new ValidateDownloadTokenUseCase(passDownloadTokenRepo)
@@ -195,7 +199,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const campaignSender = new CampaignSenderService(senderMap)
   const createCampaign = new CreateCampaignUseCase(campaignRepo, orgRepo, walletRepo)
   const previewAudience = new PreviewAudienceUseCase(orgRepo, segmentResolver, billingRepo)
-  const scheduleCampaign = new ScheduleCampaignUseCase(campaignRepo, orgRepo, walletRepo, segmentResolver, prisma)
+  const scheduleCampaign = new ScheduleCampaignUseCase(campaignRepo, orgRepo, walletRepo, passRepo, segmentResolver)
   const cancelCampaign = new CancelCampaignUseCase(campaignRepo, orgRepo)
   const getCampaigns = new GetCampaignsUseCase(campaignRepo, orgRepo)
   const getCampaignById = new GetCampaignByIdUseCase(campaignRepo, orgRepo)
@@ -216,11 +220,23 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp))
-  app.register(whatsappRoutes(whatsappManager, orgRepo))
+  app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
   app.register(appleRoutes(prisma, passRepo, walletRepo, validateDownloadToken, redeemDownloadToken))
   app.register(analyticsRoutes(getOrgAnalytics, getWalletAnalytics))
   app.register(campaignRoutes(createCampaign, previewAudience, scheduleCampaign, cancelCampaign, getCampaigns, getCampaignById, getCampaignStats, planGuard))
   app.register(billingRoutes(getBillingStatus, createCheckout, buyCredits, handleWebhook, billingRepo, stripeService))
+
+  // ── Health check ──────────────────────────────────────────────────────────
+  // Usado por load balancers / Kubernetes para liveness y readiness probes.
+  // Ejecuta SELECT 1 para confirmar que la DB está accesible.
+  app.get('/health', async (_request, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      reply.code(200).send({ status: 'ok', uptime: process.uptime(), db: 'ok' })
+    } catch {
+      reply.code(503).send({ status: 'error', uptime: process.uptime(), db: 'unreachable' })
+    }
+  })
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {

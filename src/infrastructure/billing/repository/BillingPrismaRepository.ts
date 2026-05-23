@@ -150,6 +150,19 @@ export class BillingPrismaRepository implements BillingRepository {
     })
   }
 
+  /**
+   * Deducción atómica: un solo UPDATE con condición `balance >= amount`.
+   * PostgreSQL serializa este update a nivel de fila — sin race conditions.
+   * Si el balance es insuficiente, ninguna fila se actualiza (count = 0) → false.
+   */
+  async tryDeductSmsCredits(organizationId: string, amount: number): Promise<boolean> {
+    const result = await this._db.smsCredit.updateMany({
+      where: { organizationId, balance: { gte: amount } },
+      data: { balance: { decrement: amount } },
+    })
+    return result.count > 0
+  }
+
   async findAllActivePacks(): Promise<SmsCreditPack[]> {
     const rows = await this._db.smsCreditPack.findMany({ where: { isActive: true }, orderBy: { price: 'asc' } })
     return rows.map(toPack)

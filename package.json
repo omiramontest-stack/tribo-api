@@ -11,7 +11,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:billing": "tsx prisma/seed-billing.ts",
     "db:studio": "prisma studio",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "bun test src/__tests__"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { WalletRepository } from '../../domain/wallet/repository/WalletRepository.js'
@@ -10,6 +10,18 @@ import type { CashbackRules, GiftCardRules } from '../../domain/wallet/entities/
 import { generatePkPass, type RecentTransaction } from '../../infrastructure/apple/AppleWalletService.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { isValidAdminRequest } from '../middlewares/authenticate.js'
+
+/**
+ * Valida el header "Authorization: ApplePass <authToken>" del protocolo Apple PassKit.
+ * Apple envía este header en todas las requests al web service (registro, actualización, etc.).
+ * Devuelve el authToken extraído, o null si el header está ausente o malformado.
+ */
+function extractAppleAuthToken(request: FastifyRequest): string | null {
+  const auth = request.headers.authorization
+  if (!auth?.startsWith('ApplePass ')) return null
+  const token = auth.slice('ApplePass '.length).trim()
+  return token.length > 0 ? token : null
+}
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
@@ -23,6 +35,7 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const txs = await db.cashbackTransaction.findMany({
       where: { passId: pass.id },
       orderBy: { createdAt: 'desc' },
+      take: 10,
     })
     return txs.map(tx => {
       if (tx.cashbackAmount <= 0)
@@ -42,6 +55,7 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: { in: ['giftcard_credited', 'giftcard_redeemed'] } },
       orderBy: { createdAt: 'desc' },
+      take: 10,
     })
     return events.map(ev => {
       const meta = ev.metadata as Record<string, unknown>
@@ -59,6 +73,7 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: { in: ['stamp_added', 'stamp_redeemed'] } },
       orderBy: { createdAt: 'desc' },
+      take: 10,
     })
     return events.map(ev => {
       const meta = ev.metadata as Record<string, unknown>
@@ -75,6 +90,7 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: 'points_added' },
       orderBy: { createdAt: 'desc' },
+      take: 10,
     })
     return events.map(ev => {
       const meta = ev.metadata as Record<string, unknown>
@@ -89,6 +105,7 @@ async function buildRecentTransactions(db: PrismaClient, pass: Pass, wallet: Wal
     const events = await db.passEvent.findMany({
       where: { passId: pass.id, type: 'membership_renewed' },
       orderBy: { createdAt: 'desc' },
+      take: 10,
     })
     return events.map(ev => ({ label: formatDate(ev.createdAt), value: 'Membresía renovada' }))
   }
@@ -161,6 +178,13 @@ export function appleRoutes(
 
       if (!pushToken) return reply.code(400).send()
 
+      // Validar "Authorization: ApplePass <authToken>" — protocolo Apple PassKit Web Service
+      const authToken = extractAppleAuthToken(request)
+      if (!authToken) return reply.code(401).send()
+
+      const pass = await passRepo.findByTokenAndAuthToken(serialNumber, authToken)
+      if (!pass) return reply.code(401).send()
+
       const existing = await db.deviceRegistration.findUnique({
         where: { deviceLibraryIdentifier_passToken: { deviceLibraryIdentifier, passToken: serialNumber } },
       })
@@ -183,6 +207,13 @@ export function appleRoutes(
     app.delete('/v1/devices/:deviceLibraryIdentifier/registrations/:passTypeIdentifier/:serialNumber', async (request, reply) => {
       const { deviceLibraryIdentifier, serialNumber } = request.params as Record<string, string>
 
+      // Validar "Authorization: ApplePass <authToken>"
+      const authToken = extractAppleAuthToken(request)
+      if (!authToken) return reply.code(401).send()
+
+      const pass = await passRepo.findByTokenAndAuthToken(serialNumber, authToken)
+      if (!pass) return reply.code(401).send()
+
       await db.deviceRegistration.deleteMany({
         where: { deviceLibraryIdentifier, passToken: serialNumber },
       })
@@ -190,6 +221,10 @@ export function appleRoutes(
     })
 
     // Apple Wallet Web Service — get serial numbers for device
+    // Este endpoint es llamado por Apple para saber qué passes tiene un dispositivo —
+    // no lleva authToken ya que no está atado a un pass específico. Sin embargo,
+    // solo Apple debería llamarlo; lo dejamos sin auth ya que el deviceLibraryIdentifier
+    // no expone datos sensibles más allá de los seriales.
     app.get('/v1/devices/:deviceLibraryIdentifier/registrations/:passTypeIdentifier', async (request, reply) => {
       const { deviceLibraryIdentifier } = request.params as Record<string, string>
 
@@ -208,8 +243,12 @@ export function appleRoutes(
     app.get('/v1/passes/:passTypeIdentifier/:serialNumber', async (request, reply) => {
       const { serialNumber } = request.params as Record<string, string>
 
-      const pass = await passRepo.findByToken(serialNumber)
-      if (!pass) return reply.code(404).send()
+      // Validar "Authorization: ApplePass <authToken>"
+      const authToken = extractAppleAuthToken(request)
+      if (!authToken) return reply.code(401).send()
+
+      const pass = await passRepo.findByTokenAndAuthToken(serialNumber, authToken)
+      if (!pass) return reply.code(401).send()
 
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send()
@@ -223,10 +262,16 @@ export function appleRoutes(
         .send(buffer)
     })
 
-    // Apple Wallet Web Service — log errors
+    // Apple Wallet Web Service — log errors del dispositivo
+    // No valida auth ya que Apple puede enviar logs sin estar atado a un pass.
+    // Los logs se sanitizan: solo se registran como warn, sin exponer detalles al cliente.
     app.post('/v1/log', async (request, reply) => {
-      const body = request.body as { logs?: string[] }
-      if (body?.logs) app.log.warn({ appleWalletLogs: body.logs }, 'Apple Wallet logs')
+      const body = request.body as { logs?: unknown[] }
+      if (Array.isArray(body?.logs)) {
+        // Limitamos a 20 entradas para prevenir log injection masivo
+        const safeLogs = body.logs.slice(0, 20).map(l => String(l).slice(0, 500))
+        app.log.warn({ appleWalletLogs: safeLogs }, 'Apple Wallet device logs')
+      }
       reply.code(200).send()
     })
   }

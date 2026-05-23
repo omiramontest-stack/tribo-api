@@ -1,5 +1,6 @@
 /// <reference types="node" />
 import apn from 'apn'
+import { logger } from '../logger/logger.js'
 
 let provider: apn.Provider | null = null
 
@@ -24,8 +25,8 @@ export async function sendPassUpdateNotification(pushTokens: string[]): Promise<
   note.topic = process.env.APPLE_PASS_TYPE_ID!
   const results = await Promise.allSettled(pushTokens.map(token => provider.send(note, token)))
   results.forEach(r => {
-    if (r.status === 'fulfilled') console.log('[APNs]', JSON.stringify(r.value))
-    else console.error('[APNs error]', r.reason)
+    if (r.status === 'fulfilled') logger.info({ result: r.value }, '[APNs] push sent')
+    else logger.error({ err: r.reason }, '[APNs] push failed')
   })
 }
 
@@ -38,7 +39,7 @@ export async function sendCampaignNotification(pushTokens: string[], title: stri
   note.sound = 'default'
   const results = await Promise.allSettled(pushTokens.map(token => provider.send(note, token)))
   results.forEach(r => {
-    if (r.status === 'fulfilled') console.log('[APNs campaign]', JSON.stringify(r.value))
-    else console.error('[APNs campaign error]', r.reason)
+    if (r.status === 'fulfilled') logger.info({ result: r.value }, '[APNs] campaign push sent')
+    else logger.error({ err: r.reason }, '[APNs] campaign push failed')
   })
 }

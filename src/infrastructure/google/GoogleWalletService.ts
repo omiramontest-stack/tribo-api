@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { GoogleAuth } from 'google-auth-library'
 import jwt from 'jsonwebtoken'
+import { logger } from '../logger/logger.js'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
 import type { StampsData, MembershipData, PointsData, CashbackData, DaypassData, BundleData, GiftCardData, CouponData } from '../../domain/pass/entities/PassData.js'
@@ -150,53 +151,53 @@ async function ensureClassExists(wallet: Wallet): Promise<void> {
   const client = await auth.getClient()
   const classId = buildClassId(wallet.id)
 
-  console.log('[GoogleWallet] ensureClassExists classId=%s', classId)
+  logger.debug({ classId }, '[GoogleWallet] ensureClassExists')
 
   let classExists = false
 
   try {
     const getRes = await client.request({ url: `${BASE_URL}/loyaltyClass/${classId}`, method: 'GET' })
     classExists = !!getRes.data
-    console.log('[GoogleWallet] GET loyaltyClass OK exists=%s', classExists)
+    logger.debug({ classId, classExists }, '[GoogleWallet] GET loyaltyClass OK')
   } catch (e) {
     const status = (e as { response?: { status?: number } }).response?.status ?? 500
     const body = (e as { response?: { data?: unknown } }).response?.data
-    console.error('[GoogleWallet] GET loyaltyClass status=%d body=%s', status, JSON.stringify(body))
+    logger.error({ classId, status, body }, '[GoogleWallet] GET loyaltyClass error')
     if (status !== 404) throw new Error(`Google Wallet API error ${status}: ${JSON.stringify(body)}`)
   }
 
   if (!classExists) {
-    console.log('[GoogleWallet] class not found, creating...')
+    logger.debug({ classId }, '[GoogleWallet] class not found, creating')
     try {
       await client.request({ url: `${BASE_URL}/loyaltyClass`, method: 'POST', data: buildLoyaltyClass(wallet) })
-      console.log('[GoogleWallet] class created OK')
+      logger.debug({ classId }, '[GoogleWallet] class created OK')
     } catch (e) {
       const body = (e as { response?: { data?: unknown } }).response?.data
-      console.error('[GoogleWallet] POST loyaltyClass error:', JSON.stringify(body))
+      logger.error({ classId, body }, '[GoogleWallet] POST loyaltyClass error')
       throw e
     }
   } else {
-    console.log('[GoogleWallet] class exists, updating...')
+    logger.debug({ classId }, '[GoogleWallet] class exists, updating')
     try {
       await client.request({ url: `${BASE_URL}/loyaltyClass/${classId}`, method: 'PUT', data: buildLoyaltyClass(wallet) })
-      console.log('[GoogleWallet] class updated OK')
+      logger.debug({ classId }, '[GoogleWallet] class updated OK')
     } catch (e) {
       const body = (e as { response?: { data?: unknown } }).response?.data
-      console.error('[GoogleWallet] PUT loyaltyClass error:', JSON.stringify(body))
+      logger.error({ classId, body }, '[GoogleWallet] PUT loyaltyClass error')
       throw e
     }
   }
 }
 
 export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass): Promise<string> {
-  console.log('[GoogleWallet] generateGoogleWalletUrl walletId=%s passToken=%s issuerId=%s', wallet.id, pass.token, ISSUER_ID)
+  logger.debug({ walletId: wallet.id, passToken: pass.token, issuerId: ISSUER_ID }, '[GoogleWallet] generateGoogleWalletUrl')
 
   await ensureClassExists(wallet)
 
   const credentials = getCredentials()
   const loyaltyObject = buildLoyaltyObject(wallet, pass)
 
-  console.log('[GoogleWallet] loyaltyObject objectId=%s classId=%s', loyaltyObject.id, loyaltyObject.classId)
+  logger.debug({ objectId: loyaltyObject.id, classId: loyaltyObject.classId }, '[GoogleWallet] loyaltyObject')
 
   const payload = {
     iss: credentials.client_email,
@@ -208,7 +209,7 @@ export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass): Promi
 
   const token = jwt.sign(payload, credentials.private_key, { algorithm: 'RS256' })
   const url = `https://pay.google.com/gp/v/save/${token}`
-  console.log('[GoogleWallet] URL generated OK iss=%s', credentials.client_email)
+  logger.debug({ iss: credentials.client_email }, '[GoogleWallet] URL generated OK')
   return url
 }
 
@@ -217,14 +218,14 @@ export async function updateGoogleWalletObject(wallet: Wallet, pass: Pass): Prom
   const client = await auth.getClient()
   const objectId = buildObjectId(pass.token)
 
-  console.log('[GoogleWallet] updateGoogleWalletObject objectId=%s', objectId)
+  logger.debug({ objectId }, '[GoogleWallet] updateGoogleWalletObject')
 
   await client.request({
     url: `${BASE_URL}/loyaltyObject/${objectId}`,
     method: 'PUT',
     data: buildLoyaltyObject(wallet, pass),
   }).catch(e => {
-    console.error('[GoogleWallet] updateGoogleWalletObject error:', (e as Error).message)
+    logger.error({ objectId, err: (e as Error).message }, '[GoogleWallet] updateGoogleWalletObject error')
     return null
   })
 }

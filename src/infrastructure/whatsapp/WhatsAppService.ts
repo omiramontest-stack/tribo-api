@@ -1,3 +1,5 @@
+import { logger } from '../logger/logger.js'
+
 const GRAPH_API = 'https://graph.facebook.com/v19.0'
 
 const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -11,7 +13,7 @@ export async function sendPassLinkWhatsApp(opts: {
   passUrl: string
 }): Promise<void> {
   if (!phoneNumberId || !accessToken) {
-    console.log(`[WhatsAppService] Pass link to ${opts.to}: ${opts.passUrl}`)
+    logger.warn({ to: opts.to, passUrl: opts.passUrl }, '[WhatsAppService] not configured — skipping')
     return
   }
 

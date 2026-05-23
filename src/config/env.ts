@@ -14,9 +14,15 @@ export function validateEnv(): void {
     process.exit(1)
   }
 
-  const jwtSecret = process.env.JWT_ACCESS_SECRET!
-  if (jwtSecret.length < 32) {
+  const jwtAccessSecret = process.env.JWT_ACCESS_SECRET!
+  if (jwtAccessSecret.length < 32) {
     console.error('[Startup] JWT_ACCESS_SECRET must be at least 32 characters')
+    process.exit(1)
+  }
+
+  const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET!
+  if (jwtRefreshSecret.length < 32) {
+    console.error('[Startup] JWT_REFRESH_SECRET must be at least 32 characters')
     process.exit(1)
   }
 }

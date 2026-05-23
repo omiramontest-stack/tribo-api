@@ -7,6 +7,7 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom'
 import type { PrismaClient } from '@prisma/client'
 import { useDbAuthState } from './dbAuthState.js'
+import { logger } from '../logger/logger.js'
 
 function maskPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -20,6 +21,15 @@ type SSESubscriber = (event: string, data: object) => void
 const SEND_COOLDOWN_MS = 5_000
 const QR_SESSION_TIMEOUT_MS = 5 * 60 * 1000
 
+// Exponential backoff: 5s → 10s → 20s → 40s → 60s (max), ±25% jitter
+const RECONNECT_BASE_MS = 5_000
+const RECONNECT_MAX_MS = 60_000
+function reconnectDelay(attempt: number): number {
+  const exp = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS)
+  const jitter = exp * 0.25 * (Math.random() * 2 - 1)
+  return Math.round(exp + jitter)
+}
+
 interface SessionEntry {
   sock: WASocket
   status: WhatsAppStatus
@@ -27,6 +37,7 @@ interface SessionEntry {
   phone: string | null
   lastSentAt: number
   qrTimer: ReturnType<typeof setTimeout> | null
+  reconnectAttempt: number
   flushAll: () => Promise<void>
 }
 
@@ -56,7 +67,7 @@ export class WhatsAppSessionManager {
     const rows = await this._db.whatsAppSession.findMany()
     for (const row of rows) {
       await this._connect(row.organizationId).catch(err =>
-        console.error(`[WhatsApp] restore failed org=${row.organizationId}`, err),
+        logger.error({ err, orgId: row.organizationId }, '[WhatsApp] restore failed'),
       )
     }
   }
@@ -106,7 +117,7 @@ export class WhatsAppSessionManager {
     entry.lastSentAt = now
 
     const digits = to.replace(/\D/g, '')
-    console.log(`[WhatsApp] Resolving number: ${maskPhone(digits)}`)
+    logger.info({ phone: maskPhone(digits) }, '[WhatsApp] resolving number')
 
     const results = await entry.sock.onWhatsApp(digits)
     const result = results?.[0]
@@ -115,7 +126,7 @@ export class WhatsAppSessionManager {
     }
 
     await entry.sock.sendMessage(result.jid, { text })
-    console.log(`[WhatsApp] Message sent OK to ${maskPhone(digits)}`)
+    logger.info({ phone: maskPhone(digits) }, '[WhatsApp] message sent OK')
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
@@ -144,6 +155,7 @@ export class WhatsAppSessionManager {
       phone: null,
       lastSentAt: 0,
       qrTimer: null,
+      reconnectAttempt: 0,
       flushAll,
     }
     this._sessions.set(orgId, entry)
@@ -156,13 +168,13 @@ export class WhatsAppSessionManager {
       if (qr) {
         entry.qr = qr
         entry.status = 'qr_pending'
-        console.log(`[WhatsApp] org=${orgId} QR ready`)
+        logger.info({ orgId }, '[WhatsApp] QR ready')
         this._emit(orgId, 'qr', { qr })
 
         if (entry.qrTimer) clearTimeout(entry.qrTimer)
         entry.qrTimer = setTimeout(() => {
           if (entry.status === 'qr_pending') {
-            console.log(`[WhatsApp] org=${orgId} QR timeout — destroying`)
+            logger.info({ orgId }, '[WhatsApp] QR timeout — destroying')
             this._emit(orgId, 'disconnected', {})
             this._destroyEntry(orgId)
           }
@@ -173,21 +185,22 @@ export class WhatsAppSessionManager {
         if (entry.qrTimer) { clearTimeout(entry.qrTimer); entry.qrTimer = null }
         entry.status = 'connected'
         entry.qr = null
+        entry.reconnectAttempt = 0  // reset backoff on successful connection
         const phone = sock.user?.id?.split(':')[0] ?? null
         entry.phone = phone
-        console.log(`[WhatsApp] org=${orgId} connected as ${phone ? maskPhone(phone) : 'unknown'}`)
+        logger.info({ orgId, phone: phone ? maskPhone(phone) : 'unknown' }, '[WhatsApp] connected')
         this._emit(orgId, 'connected', { phone })
 
         await this._db.whatsAppSession.upsert({
           where: { organizationId: orgId },
           create: { organizationId: orgId, phone },
           update: { phone },
-        }).catch(err => console.error(`[WhatsApp] db upsert failed org=${orgId}`, err))
+        }).catch(err => logger.error({ err, orgId }, '[WhatsApp] db upsert failed'))
       }
 
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-        console.log(`[WhatsApp] org=${orgId} disconnected: ${statusCode}`)
+        logger.info({ orgId, statusCode }, '[WhatsApp] disconnected')
 
         if (statusCode === DisconnectReason.loggedOut) {
           this._emit(orgId, 'disconnected', {})
@@ -199,14 +212,16 @@ export class WhatsAppSessionManager {
           ]).catch(() => {})
         } else {
           entry.status = 'disconnected'
-          this._emit(orgId, 'reconnecting', {})
+          const delay = reconnectDelay(entry.reconnectAttempt++)
+          this._emit(orgId, 'reconnecting', { delayMs: delay })
+          logger.info({ orgId, attempt: entry.reconnectAttempt, delayMs: delay }, '[WhatsApp] scheduling reconnect')
           setTimeout(() => {
             if (this._sessions.get(orgId)?.status === 'disconnected') {
               this._connect(orgId).catch(err =>
-                console.error(`[WhatsApp] reconnect failed org=${orgId}`, err),
+                logger.error({ err, orgId }, '[WhatsApp] reconnect failed'),
               )
             }
-          }, 5_000)
+          }, delay)
         }
       }
     })

@@ -10,6 +10,7 @@ import type { GetCampaignByIdUseCase } from '../../application/campaign/useCases
 import type { GetCampaignStatsUseCase } from '../../application/campaign/useCases/GetCampaignStatsUseCase.js'
 import { SEGMENT_TYPES } from '../../domain/campaign/entities/Segment.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
+import { parsePagination } from '../../application/common/Pagination.js'
 
 const channelSchema = z.enum(['sms', 'email', 'wallet_push'])
 
@@ -107,13 +108,13 @@ export function campaignRoutes(
     })
 
     app.get('/campaigns', async (request, reply) => {
-      const { page = '1', limit = '20', status: rawStatus } = request.query as { page?: string; limit?: string; status?: string }
-      const status = statusSchema.safeParse(rawStatus)
+      const query = request.query as Record<string, string>
+      const status = statusSchema.safeParse(query.status)
       const result = await getCampaigns.run({
         organizationId: request.admin.organizationId!,
         adminId: request.admin.adminId,
         status: status.success ? status.data : undefined,
-        pagination: { page: Number(page), limit: Number(limit) },
+        pagination: parsePagination(query),
       })
       reply.send({ ...result, data: result.data.map(c => ({ ...c, audienceSize: c.totalRecipients })) })
     })

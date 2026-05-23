@@ -25,16 +25,20 @@ export interface PaymentParams extends CheckoutParams {
   packId: string
 }
 
-function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY
-  if (!key) throw new Error('STRIPE_SECRET_KEY not configured')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new Stripe(key, { apiVersion: '2026-04-22.dahlia' as any })
-}
-
 export class StripeService {
+  /** Singleton Stripe client — instantiated once at construction time.
+   *  Avoids creating a new TCP connection (and re-reading env) on every method call. */
+  private readonly _stripe: Stripe
+
+  constructor() {
+    const key = process.env.STRIPE_SECRET_KEY
+    if (!key) throw new Error('STRIPE_SECRET_KEY not configured')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this._stripe = new Stripe(key, { apiVersion: '2026-04-22.dahlia' as any })
+  }
+
   async createCheckoutSession(params: CheckoutParams): Promise<string> {
-    const stripe = getStripe()
+    const stripe = this._stripe
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -49,7 +53,7 @@ export class StripeService {
   }
 
   async createPaymentSession(params: PaymentParams): Promise<string> {
-    const stripe = getStripe()
+    const stripe = this._stripe
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -64,7 +68,7 @@ export class StripeService {
   }
 
   async getSubscription(stripeSubscriptionId: string): Promise<StripeSubscriptionData> {
-    const stripe = getStripe()
+    const stripe = this._stripe
     const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId)
     const raw = sub as unknown as Record<string, unknown>
     const item = sub.items.data[0]
@@ -84,8 +88,7 @@ export class StripeService {
   async verifyWebhook(rawBody: Buffer, signature: string): Promise<StripeWebhookPayload> {
     const secret = process.env.STRIPE_WEBHOOK_SECRET
     if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET not configured')
-    const stripe = getStripe()
-    const event = stripe.webhooks.constructEvent(rawBody, signature, secret)
+    const event = this._stripe.webhooks.constructEvent(rawBody, signature, secret)
     return {
       id: event.id,
       type: event.type,
@@ -94,8 +97,7 @@ export class StripeService {
   }
 
   async createBillingPortalSession(customerId: string, returnUrl: string): Promise<string> {
-    const stripe = getStripe()
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await this._stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
     })

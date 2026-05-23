@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { logger } from '../logger/logger.js'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM = process.env.RESEND_FROM_EMAIL ?? process.env.EMAIL_FROM ?? 'no-reply@walletapp.com'
@@ -8,7 +9,7 @@ export async function sendVerificationEmail(opts: {
   verifyUrl: string
 }): Promise<void> {
   if (!resend) {
-    console.log(`[EmailService] Verification email to ${opts.to}: ${opts.verifyUrl}`)
+    logger.warn({ to: opts.to, verifyUrl: opts.verifyUrl }, '[EmailService] not configured — skipping verification email')
     return
   }
 
@@ -36,7 +37,7 @@ export async function sendEmailChangeConfirmation(opts: {
   confirmUrl: string
 }): Promise<void> {
   if (!resend) {
-    console.log(`[EmailService] Email change confirmation to ${opts.to}: ${opts.confirmUrl}`)
+    logger.warn({ to: opts.to }, '[EmailService] not configured — skipping email change confirmation')
     return
   }
 
@@ -64,7 +65,7 @@ export async function sendPasswordResetEmail(opts: {
   resetUrl: string
 }): Promise<void> {
   if (!resend) {
-    console.log(`[EmailService] Password reset email to ${opts.to}: ${opts.resetUrl}`)
+    logger.warn({ to: opts.to }, '[EmailService] not configured — skipping password reset email')
     return
   }
 
@@ -94,7 +95,7 @@ export async function sendInvitationEmail(opts: {
   inviteUrl: string
 }): Promise<void> {
   if (!resend) {
-    console.log(`[EmailService] Invitation email to ${opts.to}: ${opts.inviteUrl}`)
+    logger.warn({ to: opts.to }, '[EmailService] not configured — skipping invitation email')
     return
   }
 

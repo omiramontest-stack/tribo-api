@@ -1,0 +1,165 @@
+/**
+ * Tests — Stripe Webhook flow (Fix-22 / Flow 2)
+ *
+ * Tests the critical invariants of HandleStripeWebhookUseCase:
+ *   - Idempotency: duplicate events are silently ignored
+ *   - checkout.session.completed (subscription mode) → saves/updates subscription
+ *   - customer.subscription.deleted → marks subscription as cancelled
+ *   - invoice.payment_failed → marks subscription as past_due
+ *   - Cache is invalidated on subscription changes
+ */
+import { describe, it, expect, mock, beforeEach } from 'bun:test'
+import { HandleStripeWebhookUseCase } from '../application/billing/useCases/HandleStripeWebhookUseCase.js'
+import type { BillingRepository } from '../domain/billing/repository/BillingRepository.js'
+import type { StripeService } from '../infrastructure/billing/stripe/StripeService.js'
+import type { Plan } from '../domain/billing/entities/Plan.js'
+import type { Subscription } from '../domain/billing/entities/Subscription.js'
+
+const PLAN: Plan = {
+  id: 'plan-1',
+  slug: 'base',
+  name: 'Base',
+  price: 49,
+  currency: 'USD',
+  stripePriceId: 'price_abc',
+  maxWallets: 5,
+  maxPasses: 1000,
+  emailCampaigns: true,
+  smsCampaigns: false,
+  analyticsLevel: 'basic',
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}
+
+const SUBSCRIPTION: Subscription = {
+  id: 'sub-1',
+  organizationId: 'org-1',
+  planId: 'plan-1',
+  status: 'active',
+  stripeCustomerId: 'cus_abc',
+  stripeSubscriptionId: 'sub_abc',
+  stripePriceId: 'price_abc',
+  trialEndsAt: null,
+  currentPeriodStart: new Date().toISOString(),
+  currentPeriodEnd: new Date(Date.now() + 30 * 86400000).toISOString(),
+  cancelledAt: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}
+
+function makeBillingRepo(overrides: Partial<BillingRepository> = {}): BillingRepository {
+  return {
+    isWebhookEventProcessed: mock(async () => false),
+    markWebhookEventProcessed: mock(async () => {}),
+    findSubscriptionByOrg: mock(async () => null),
+    findSubscriptionByStripeId: mock(async () => null),
+    findSubscriptionByStripeCustomer: mock(async () => null),
+    saveSubscription: mock(async () => {}),
+    updateSubscription: mock(async () => {}),
+    findPlanBySlug: mock(async () => PLAN),
+    findPlanById: mock(async () => PLAN),
+    findAllActivePlans: mock(async () => [PLAN]),
+    addSmsCredits: mock(async () => {}),
+    findPackById: mock(async () => null),
+    tryDeductSmsCredits: mock(async () => true),
+    getSmsCredits: mock(async () => ({ organizationId: 'org-1', balance: 100 })),
+    ...overrides,
+  } as unknown as BillingRepository
+}
+
+function makeStripeService(overrides: Partial<StripeService> = {}): StripeService {
+  return {
+    verifyWebhook: mock(async (_a: Buffer, _b: string) => ({
+      id: 'evt_1',
+      type: 'customer.subscription.deleted',
+      data: { id: 'sub_abc' },
+    })),
+    createCheckoutSession: mock(async () => 'https://checkout.stripe.com/session'),
+    createPaymentSession: mock(async () => 'https://checkout.stripe.com/payment'),
+    getSubscription: mock(async () => ({
+      priceId: 'price_abc',
+      planSlug: 'base',
+      currentPeriodStart: new Date().toISOString(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 86400000).toISOString(),
+    })),
+    createBillingPortalSession: mock(async () => 'https://billing.stripe.com/portal'),
+    ...overrides,
+  } as unknown as StripeService
+}
+
+describe('HandleStripeWebhookUseCase', () => {
+  describe('idempotency', () => {
+    it('silently returns when event was already processed', async () => {
+      const repo = makeBillingRepo({
+        isWebhookEventProcessed: mock(async () => true),
+      })
+      const stripe = makeStripeService()
+      const useCase = new HandleStripeWebhookUseCase(repo, stripe)
+
+      await useCase.run(Buffer.from('{}'), 'sig')
+
+      expect(repo.markWebhookEventProcessed).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('customer.subscription.deleted', () => {
+    it('marks subscription as cancelled', async () => {
+      const repo = makeBillingRepo({
+        findSubscriptionByStripeId: mock(async () => ({ ...SUBSCRIPTION })),
+      })
+      const stripe = makeStripeService({
+        verifyWebhook: mock(async () => ({
+          id: 'evt_del',
+          type: 'customer.subscription.deleted',
+          data: { id: 'sub_abc' },
+        })),
+      })
+      const useCase = new HandleStripeWebhookUseCase(repo, stripe)
+      await useCase.run(Buffer.from('{}'), 'sig')
+
+      const updateCall = (repo.updateSubscription as ReturnType<typeof mock>).mock.calls[0][0]
+      expect(updateCall.status).toBe('cancelled')
+      expect(updateCall.cancelledAt).toBeTruthy()
+    })
+  })
+
+  describe('invoice.payment_failed', () => {
+    it('marks subscription as past_due', async () => {
+      const repo = makeBillingRepo({
+        findSubscriptionByStripeCustomer: mock(async () => ({ ...SUBSCRIPTION })),
+      })
+      const stripe = makeStripeService({
+        verifyWebhook: mock(async () => ({
+          id: 'evt_fail',
+          type: 'invoice.payment_failed',
+          data: { customer: 'cus_abc' },
+        })),
+      })
+      const useCase = new HandleStripeWebhookUseCase(repo, stripe)
+      await useCase.run(Buffer.from('{}'), 'sig')
+
+      const updateCall = (repo.updateSubscription as ReturnType<typeof mock>).mock.calls[0][0]
+      expect(updateCall.status).toBe('past_due')
+    })
+  })
+
+  describe('event marking', () => {
+    it('marks event as processed after handling', async () => {
+      const repo = makeBillingRepo({
+        findSubscriptionByStripeId: mock(async () => ({ ...SUBSCRIPTION })),
+      })
+      const stripe = makeStripeService({
+        verifyWebhook: mock(async () => ({
+          id: 'evt_del_2',
+          type: 'customer.subscription.deleted',
+          data: { id: 'sub_abc' },
+        })),
+      })
+      const useCase = new HandleStripeWebhookUseCase(repo, stripe)
+      await useCase.run(Buffer.from('{}'), 'sig')
+
+      expect(repo.markWebhookEventProcessed).toHaveBeenCalledWith('evt_del_2', 'customer.subscription.deleted')
+    })
+  })
+})

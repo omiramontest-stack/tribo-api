@@ -1,3 +1,5 @@
+import { logger } from '../logger/logger.js'
+
 export async function sendPassLinkSms(opts: {
   to: string
   firstName: string
@@ -8,7 +10,7 @@ export async function sendPassLinkSms(opts: {
   const fromNumber = process.env.TELNYX_PHONE_NUMBER
 
   if (!apiKey || !fromNumber) {
-    console.log(`[SmsService] Pass link to ${opts.to}: ${opts.passUrl}`)
+    logger.warn({ to: opts.to, passUrl: opts.passUrl }, '[SmsService] not configured — skipping')
     return
   }
 

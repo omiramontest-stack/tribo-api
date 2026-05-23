@@ -1,6 +1,21 @@
 import type { Organization } from '../entities/Organization.js'
 import type { OrganizationMember, MemberRole } from '../entities/OrganizationMember.js'
 
+export interface CreateOrgWithMemberAndSubscriptionParams {
+  orgId: string
+  name: string
+  logoUrl: string | null
+  industry: string | null
+  country: string | null
+  phone: string | null
+  memberId: string
+  adminId: string
+  subscriptionId: string
+  planId: string
+  trialEndsAt: Date
+  now: Date
+}
+
 export interface OrganizationRepository {
   save(org: Organization): Promise<Organization>
   update(id: string, data: { name?: string; industry?: string | null; country?: string | null; phone?: string | null; logoUrl?: string | null; whatsappMessageTemplate?: string | null }): Promise<Organization>
@@ -14,4 +29,6 @@ export interface OrganizationRepository {
   isEmailAlreadyMember(email: string, organizationId: string): Promise<boolean>
   updateMemberRole(memberId: string, role: MemberRole): Promise<OrganizationMember>
   removeMember(memberId: string): Promise<void>
+  /** Crea organización + miembro owner + suscripción trial de forma atómica. */
+  createWithMemberAndSubscription(params: CreateOrgWithMemberAndSubscriptionParams): Promise<Organization>
 }

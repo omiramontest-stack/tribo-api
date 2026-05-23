@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import { OAuth2Client } from 'google-auth-library'
 import { z } from 'zod'
 import type { FastifyInstance } from 'fastify'
 import type { LoginUseCase } from '../../application/auth/useCases/LoginUseCase.js'
@@ -250,26 +251,47 @@ export function authRoutes(
       const { code } = request.query as { code?: string }
       if (!code) return reply.code(400).send({ error: 'Missing code' })
 
+      const clientId = process.env.GOOGLE_CLIENT_ID
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI
+      if (!clientId || !clientSecret || !redirectUri) {
+        return reply.code(503).send({ error: 'Google OAuth not configured' })
+      }
+
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           code,
-          client_id: process.env.GOOGLE_CLIENT_ID!,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-          redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
           grant_type: 'authorization_code',
         }),
       })
 
-      const tokens = await tokenRes.json() as { id_token?: string; access_token?: string; error?: string; error_description?: string }
+      const tokens = await tokenRes.json() as { id_token?: string; access_token?: string; error?: string }
       if (tokens.error || !tokens.id_token) {
-        app.log.error({ googleError: tokens.error, description: tokens.error_description }, 'Google token exchange failed')
-        return reply.code(401).send({ error: 'Google auth failed', detail: tokens.error, description: tokens.error_description })
+        app.log.error({ googleError: tokens.error }, 'Google token exchange failed')
+        return reply.code(401).send({ error: 'Google auth failed' })
       }
 
-      const payload = jwt.decode(tokens.id_token) as { sub: string; email: string; name: string } | null
-      if (!payload) return reply.code(401).send({ error: 'Invalid Google token' })
+      // Verificar la firma, expiración y audience del ID token contra los servidores de Google.
+      // jwt.decode() NO verifica la firma — cualquiera podría forjar un token.
+      let payload: { sub: string; email: string; name: string }
+      try {
+        const oauthClient = new OAuth2Client(clientId)
+        const ticket = await oauthClient.verifyIdToken({
+          idToken: tokens.id_token,
+          audience: clientId,
+        })
+        const p = ticket.getPayload()
+        if (!p?.sub || !p?.email) throw new Error('Missing required fields in Google token')
+        payload = { sub: p.sub, email: p.email, name: p.name ?? p.email }
+      } catch (err) {
+        app.log.error(err, 'Google ID token verification failed')
+        return reply.code(401).send({ error: 'Invalid Google token' })
+      }
 
       const admin = await googleAuthUseCase.run({
         googleId: payload.sub,

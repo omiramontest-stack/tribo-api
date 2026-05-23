@@ -13,9 +13,10 @@ import type { SendPassWhatsAppUseCase } from '../../application/pass/useCases/Se
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
-import { sendWhatsAppRateLimit } from '../plugins/rateLimit.js'
+import { sendWhatsAppRateLimit, daypassScanRateLimit, sendPassLinkRateLimit } from '../plugins/rateLimit.js'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
+import { parsePagination } from '../../application/common/Pagination.js'
 
 const generateSchema = z.object({
   firstName: z.string().min(1),
@@ -77,8 +78,9 @@ export function passRoutes(
       reply.send(await getPassByToken.run(token))
     })
 
-    // Public — daypass scan (called by scanner at event entrance)
-    app.post('/passes/scan/:token', async (request, reply) => {
+    // Daypass scan — público por diseño (scanner en entrada del evento no tiene sesión).
+    // Rate limit agresivo por IP para prevenir invalidación masiva de passes.
+    app.post('/passes/scan/:token', { ...daypassScanRateLimit }, async (request, reply) => {
       const { token } = request.params as { token: string }
       await scanDaypass.run({ token })
       reply.send({ ok: true, message: 'Daypass scanned and invalidated' })
@@ -87,23 +89,21 @@ export function passRoutes(
     // Protected — admin actions
     app.get('/wallets/:walletId/passes', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { walletId } = request.params as { walletId: string }
-      const { page = '1', limit = '20' } = request.query as { page?: string; limit?: string }
       reply.send(await getPassesByWallet.run({
         walletId,
         adminId: request.admin.adminId,
         organizationId: request.admin.organizationId!,
-        pagination: { page: Number(page), limit: Number(limit) },
+        pagination: parsePagination(request.query as Record<string, string>),
       }))
     })
 
     app.get('/wallets/:walletId/passes/scanned', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { walletId } = request.params as { walletId: string }
-      const { page = '1', limit = '20' } = request.query as { page?: string; limit?: string }
       reply.send(await getScannedDaypasses.run({
         walletId,
         adminId: request.admin.adminId,
         organizationId: request.admin.organizationId!,
-        pagination: { page: Number(page), limit: Number(limit) },
+        pagination: parsePagination(request.query as Record<string, string>),
       }))
     })
 
@@ -137,7 +137,7 @@ export function passRoutes(
       reply.send(await getCashbackTransactions.run({ token, adminId: request.admin.adminId, organizationId: request.admin.organizationId! }))
     })
 
-    app.post('/passes/:token/send-link', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
+    app.post('/passes/:token/send-link', { ...sendPassLinkRateLimit, preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { token } = request.params as { token: string }
       await sendPassLink.run({ token, adminId: request.admin.adminId, organizationId: request.admin.organizationId! })
       reply.send({ ok: true })

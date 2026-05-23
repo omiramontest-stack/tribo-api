@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
-import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
+import type { OrganizationRepository, CreateOrgWithMemberAndSubscriptionParams } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { Organization } from '../../../domain/organization/entities/Organization.js'
 import type { OrganizationMember, MemberRole } from '../../../domain/organization/entities/OrganizationMember.js'
 
@@ -102,6 +102,45 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
 
   async removeMember(memberId: string): Promise<void> {
     await this._db.organizationMember.delete({ where: { id: memberId } })
+  }
+
+  async createWithMemberAndSubscription(p: CreateOrgWithMemberAndSubscriptionParams): Promise<Organization> {
+    const [orgRow] = await this._db.$transaction([
+      this._db.organization.create({
+        data: {
+          id: p.orgId,
+          name: p.name,
+          logoUrl: p.logoUrl,
+          industry: p.industry,
+          country: p.country,
+          phone: p.phone,
+        },
+      }),
+      this._db.organizationMember.create({
+        data: {
+          id: p.memberId,
+          organizationId: p.orgId,
+          adminId: p.adminId,
+          role: 'owner',
+        },
+      }),
+      this._db.subscription.create({
+        data: {
+          id: p.subscriptionId,
+          organizationId: p.orgId,
+          planId: p.planId,
+          status: 'trialing',
+          trialEndsAt: p.trialEndsAt,
+          currentPeriodStart: p.now,
+          currentPeriodEnd: p.trialEndsAt,
+          stripeCustomerId: null,
+          stripeSubscriptionId: null,
+          stripePriceId: null,
+          cancelledAt: null,
+        },
+      }),
+    ])
+    return this._toOrg(orgRow)
   }
 
   private _toOrg(row: {

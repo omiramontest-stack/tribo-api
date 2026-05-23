@@ -3,6 +3,8 @@ import type { PaginationParams, PaginatedResult } from '../../../application/com
 
 export interface PassRepository {
   findByToken(token: string): Promise<Pass | null>
+  /** Busca un pass activo verificando que el authToken coincida (para Apple PassKit Web Service). */
+  findByTokenAndAuthToken(token: string, authToken: string): Promise<Pass | null>
   countByOrganizationId(organizationId: string): Promise<number>
   findByWalletId(walletId: string, pagination: PaginationParams): Promise<PaginatedResult<Pass>>
   findScannedByWalletId(walletId: string, pagination: PaginationParams): Promise<PaginatedResult<Pass>>
@@ -10,4 +12,8 @@ export interface PassRepository {
   update(pass: Pass): Promise<Pass>
   delete(id: string): Promise<void>
   deleteByWalletId(walletId: string): Promise<void>
+  /** Devuelve los push tokens de los dispositivos Apple registrados para un pass (por passToken). */
+  findPushTokensByPassToken(passToken: string): Promise<string[]>
+  /** Batch: devuelve un mapa passToken → pushToken para un conjunto de passes. */
+  findPushTokensByPassTokens(passTokens: string[]): Promise<Map<string, string>>
 }

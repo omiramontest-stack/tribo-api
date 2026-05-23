@@ -57,20 +57,28 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
   async getOrgChartByDay(organizationId: string, period: AnalyticsPeriod): Promise<DayCount[]> {
     const days = periodToDays(period)
     const since = sinceDate(days)
+    const tz = process.env.TZ ?? 'UTC'
 
-    const events = await this._db.passEvent.findMany({
-      where: { organizationId, type: { in: SCAN_TYPES }, createdAt: { gte: since }, pass: ACTIVE_PASS },
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    })
+    // GROUP BY en SQL: evita cargar todos los eventos en memoria del proceso.
+    // AT TIME ZONE convierte a la zona horaria del negocio antes de truncar el día.
+    const rows = await this._db.$queryRaw<{ day: string; count: bigint }[]>`
+      SELECT TO_CHAR(DATE_TRUNC('day', "createdAt" AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS day,
+             COUNT(*)::bigint AS count
+      FROM "PassEvent"
+      WHERE "organizationId" = ${organizationId}
+        AND "type" = ANY(${SCAN_TYPES}::text[])
+        AND "createdAt" >= ${since}
+        AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
+      GROUP BY day
+      ORDER BY day ASC`
 
+    // Rellenar días sin eventos con 0 para que el gráfico sea continuo
     const map = new Map<string, number>()
     for (let i = days - 1; i >= 0; i--) {
       map.set(localDateKeyNDaysAgo(i), 0)
     }
-    for (const e of events) {
-      const key = localDateKey(e.createdAt)
-      map.set(key, (map.get(key) ?? 0) + 1)
+    for (const row of rows) {
+      map.set(row.day, Number(row.count))
     }
 
     return Array.from(map.entries()).map(([date, count]) => ({ date, count }))
@@ -199,75 +207,79 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
 
   async getWalletChartByDay(walletId: string, days: number): Promise<DayCount[]> {
     const since = sinceDate(days)
+    const tz = process.env.TZ ?? 'UTC'
 
-    const events = await this._db.passEvent.findMany({
-      where: { walletId, type: { in: SCAN_TYPES }, createdAt: { gte: since }, pass: ACTIVE_PASS },
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    })
+    const rows = await this._db.$queryRaw<{ day: string; count: bigint }[]>`
+      SELECT TO_CHAR(DATE_TRUNC('day', "createdAt" AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS day,
+             COUNT(*)::bigint AS count
+      FROM "PassEvent"
+      WHERE "walletId" = ${walletId}
+        AND "type" = ANY(${SCAN_TYPES}::text[])
+        AND "createdAt" >= ${since}
+        AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
+      GROUP BY day
+      ORDER BY day ASC`
 
     const map = new Map<string, number>()
     for (let i = days - 1; i >= 0; i--) {
       map.set(localDateKeyNDaysAgo(i), 0)
     }
-    for (const e of events) {
-      const key = localDateKey(e.createdAt)
-      map.set(key, (map.get(key) ?? 0) + 1)
+    for (const row of rows) {
+      map.set(row.day, Number(row.count))
     }
 
     return Array.from(map.entries()).map(([date, count]) => ({ date, count }))
   }
 
   async getWalletInsights(walletId: string): Promise<WalletInsights> {
-    const events = await this._db.passEvent.findMany({
-      where: { walletId, type: { in: SCAN_TYPES }, pass: ACTIVE_PASS },
-      select: { createdAt: true, passId: true },
-    })
+    const tz = process.env.TZ ?? 'UTC'
 
-    const hourMap = new Map<number, number>()
-    const dayMap = new Map<number, number>()
-    const passCountMap = new Map<string, number>()
+    // Todas las agregaciones se hacen en la base de datos — sin carga in-memory.
+    // Con millones de eventos, esto pasa de OOM a microsegundos de procesamiento SQL.
+    const [hourRows, dayRows, topPassRows] = await Promise.all([
+      // Mejor hora del día (en timezone local del negocio)
+      this._db.$queryRaw<{ hour: number; count: bigint }[]>`
+        SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tz})::int AS hour,
+               COUNT(*)::bigint AS count
+        FROM "PassEvent"
+        WHERE "walletId" = ${walletId}
+          AND "type" = ANY(${SCAN_TYPES}::text[])
+          AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
+        GROUP BY hour
+        ORDER BY count DESC
+        LIMIT 1`,
 
-    for (const e of events) {
-      // getHours() / getDay() use the process timezone (TZ=America/Mexico_City)
-      const h = e.createdAt.getHours()
-      hourMap.set(h, (hourMap.get(h) ?? 0) + 1)
+      // Mejor día de la semana (0=domingo, 6=sábado)
+      this._db.$queryRaw<{ dow: number; count: bigint }[]>`
+        SELECT EXTRACT(DOW FROM "createdAt" AT TIME ZONE ${tz})::int AS dow,
+               COUNT(*)::bigint AS count
+        FROM "PassEvent"
+        WHERE "walletId" = ${walletId}
+          AND "type" = ANY(${SCAN_TYPES}::text[])
+          AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
+        GROUP BY dow
+        ORDER BY count DESC
+        LIMIT 1`,
 
-      const d = e.createdAt.getDay()
-      dayMap.set(d, (dayMap.get(d) ?? 0) + 1)
+      // Top 10 passes más activos (con nombres en un JOIN)
+      this._db.$queryRaw<{ passId: string; firstName: string; lastName: string; eventCount: bigint }[]>`
+        SELECT e."passId", p."firstName", p."lastName", COUNT(*)::bigint AS "eventCount"
+        FROM "PassEvent" e
+        JOIN "Pass" p ON p.id = e."passId" AND p."deletedAt" IS NULL
+        WHERE e."walletId" = ${walletId}
+          AND e."type" = ANY(${SCAN_TYPES}::text[])
+        GROUP BY e."passId", p."firstName", p."lastName"
+        ORDER BY "eventCount" DESC
+        LIMIT 10`,
+    ])
 
-      passCountMap.set(e.passId, (passCountMap.get(e.passId) ?? 0) + 1)
-    }
-
-    let bestHour: number | null = null
-    let bestHourCount = 0
-    for (const [h, c] of hourMap) {
-      if (c > bestHourCount) { bestHourCount = c; bestHour = h }
-    }
-
-    let bestDayOfWeek: number | null = null
-    let bestDayCount = 0
-    for (const [d, c] of dayMap) {
-      if (c > bestDayCount) { bestDayCount = c; bestDayOfWeek = d }
-    }
-
-    const sortedPasses = Array.from(passCountMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-
-    let topCustomers: TopCustomer[] = []
-    if (sortedPasses.length > 0) {
-      const topPassIds = sortedPasses.map(([id]) => id)
-      const passes = await this._db.pass.findMany({
-        where: { id: { in: topPassIds }, deletedAt: null },
-        select: { id: true, firstName: true, lastName: true },
-      })
-      const passMap = new Map(passes.map(p => [p.id, p]))
-      topCustomers = sortedPasses.flatMap(([passId, eventCount]) => {
-        const p = passMap.get(passId)
-        return p ? [{ firstName: p.firstName, lastName: p.lastName, eventCount }] : []
-      })
-    }
+    const bestHour = hourRows[0] ? hourRows[0].hour : null
+    const bestDayOfWeek = dayRows[0] ? dayRows[0].dow : null
+    const topCustomers: TopCustomer[] = topPassRows.map(r => ({
+      firstName: r.firstName,
+      lastName: r.lastName,
+      eventCount: Number(r.eventCount),
+    }))
 
     return { bestHour, bestDayOfWeek, topCustomers }
   }

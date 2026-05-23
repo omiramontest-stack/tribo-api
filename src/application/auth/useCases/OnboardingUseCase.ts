@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
-import type { PrismaClient } from '@prisma/client'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
+import type { BillingRepository } from '../../../domain/billing/repository/BillingRepository.js'
 import type { Organization } from '../../../domain/organization/entities/Organization.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
@@ -18,8 +18,8 @@ export interface OnboardingDto {
 export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
   constructor(
     private readonly _orgRepository: OrganizationRepository,
+    private readonly _billingRepository: BillingRepository,
     private readonly _createTrial: CreateTrialUseCase,
-    private readonly _db: PrismaClient,
   ) {}
 
   async run(dto: OnboardingDto): Promise<Organization> {
@@ -27,7 +27,7 @@ export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
 
     if (existing.length > 0) {
       const org = existing[0]
-      const subscription = await this._db.subscription.findUnique({ where: { organizationId: org.id } })
+      const subscription = await this._billingRepository.findSubscriptionByOrg(org.id)
       if (subscription) throw new AppError('ALREADY_ONBOARDED', 'Already has an organization', 409)
 
       // org exists but no subscription (orphaned) — create trial
@@ -35,60 +35,25 @@ export class OnboardingUseCase implements UseCase<OnboardingDto, Organization> {
       return org
     }
 
-    const trialPlan = await this._db.plan.findUnique({ where: { slug: 'trial' } })
+    const trialPlan = await this._billingRepository.findPlanBySlug('trial')
     if (!trialPlan) throw new AppError('PLAN_NOT_FOUND', 'Trial plan not configured', 500)
 
-    const orgId = randomUUID()
-    const memberId = randomUUID()
-    const subscriptionId = randomUUID()
     const now = new Date()
     const trialEndsAt = new Date(now.getTime() + 14 * 86400000)
 
-    const [orgRow] = await this._db.$transaction([
-      this._db.organization.create({
-        data: {
-          id: orgId,
-          name: dto.organizationName,
-          logoUrl: dto.logoUrl ?? null,
-          industry: dto.industry ?? null,
-          country: dto.country ?? null,
-          phone: dto.phone ?? null,
-        },
-      }),
-      this._db.organizationMember.create({
-        data: {
-          id: memberId,
-          organizationId: orgId,
-          adminId: dto.adminId,
-          role: 'owner',
-        },
-      }),
-      this._db.subscription.create({
-        data: {
-          id: subscriptionId,
-          organizationId: orgId,
-          planId: trialPlan.id,
-          status: 'trialing',
-          trialEndsAt,
-          currentPeriodStart: now,
-          currentPeriodEnd: trialEndsAt,
-          stripeCustomerId: null,
-          stripeSubscriptionId: null,
-          stripePriceId: null,
-          cancelledAt: null,
-        },
-      }),
-    ])
-
-    return {
-      id: orgRow.id,
-      name: orgRow.name,
-      logoUrl: orgRow.logoUrl,
-      industry: orgRow.industry,
-      country: orgRow.country,
-      phone: orgRow.phone,
-      whatsappMessageTemplate: null,
-      createdAt: orgRow.createdAt.toISOString(),
-    }
+    return this._orgRepository.createWithMemberAndSubscription({
+      orgId: randomUUID(),
+      name: dto.organizationName,
+      logoUrl: dto.logoUrl ?? null,
+      industry: dto.industry ?? null,
+      country: dto.country ?? null,
+      phone: dto.phone ?? null,
+      memberId: randomUUID(),
+      adminId: dto.adminId,
+      subscriptionId: randomUUID(),
+      planId: trialPlan.id,
+      trialEndsAt,
+      now,
+    })
   }
 }

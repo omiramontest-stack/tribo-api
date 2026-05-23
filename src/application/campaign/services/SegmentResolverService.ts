@@ -12,6 +12,9 @@ type RawPass = {
 function toPass(r: RawPass): Pass {
   return {
     id: r.id, walletId: r.walletId, token: r.token,
+    // authToken no se selecciona en las queries raw de segmentación —
+    // no se necesita para resolver destinatarios de campañas.
+    authToken: '',
     firstName: r.firstName, lastName: r.lastName, phone: r.phone,
     email: r.email ?? null,
     data: r.data as PassData,

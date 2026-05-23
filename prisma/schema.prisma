@@ -140,6 +140,10 @@ model Pass {
   id                   String                @id @default(cuid())
   walletId             String
   token                String                @unique @default(cuid())
+  /// Token secreto para el protocolo Apple PassKit Web Service.
+  /// Apple lo envía en el header "Authorization: ApplePass <authToken>"
+  /// en cada request de registro/actualización de dispositivo.
+  authToken            String                @default(cuid())
   firstName            String
   lastName             String
   phone                String
@@ -378,7 +382,9 @@ model PassEvent {
   createdAt      DateTime      @default(now())
   pass           Pass          @relation(fields: [passId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId, type, createdAt])
   @@index([organizationId, createdAt])
+  @@index([walletId, type, createdAt])
   @@index([walletId, createdAt])
   @@index([passId, createdAt])
   @@index([type, createdAt])

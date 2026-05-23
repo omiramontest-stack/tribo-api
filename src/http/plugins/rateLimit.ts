@@ -63,3 +63,26 @@ export const sendWhatsAppRateLimit = {
     },
   },
 }
+
+// Daypass scan — público por diseño (scanners en evento), pero limitado agresivamente
+// para prevenir invalidación masiva de passes por actores maliciosos.
+// TODO: evaluar agregar API key de organización para scanners autorizados.
+export const daypassScanRateLimit = {
+  config: {
+    rateLimit: {
+      max: 10,
+      timeWindow: '1 minute',
+      // La key por IP es el default de @fastify/rate-limit
+    },
+  },
+}
+
+// send-link / send-whatsapp por pass — previene spam SMS/email a clientes finales
+export const sendPassLinkRateLimit = {
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: '1 hour',
+    },
+  },
+}

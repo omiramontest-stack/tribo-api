@@ -8,7 +8,9 @@ export interface CampaignRepository {
   update(campaign: Campaign): Promise<Campaign>
   findById(id: string): Promise<Campaign | null>
   findByOrg(organizationId: string, pagination: PaginationParams, status?: Campaign['status']): Promise<PaginatedResult<Campaign>>
-  findDueCampaigns(): Promise<Campaign[]>
+  /** Retorna campañas listas para procesar y las marca como 'sending' de forma atómica
+   *  usando SELECT FOR UPDATE SKIP LOCKED para soportar múltiples workers en paralelo. */
+  claimDueCampaigns(): Promise<Campaign[]>
   saveRecipients(recipients: CampaignRecipient[]): Promise<void>
   findPendingRecipients(campaignId: string, batchSize: number): Promise<CampaignRecipient[]>
   markRecipientSent(id: string): Promise<void>

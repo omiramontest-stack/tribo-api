@@ -64,6 +64,7 @@ export class GeneratePassUseCase implements UseCase<GeneratePassDto, Pass> {
       id: randomUUID(),
       walletId: dto.walletId,
       token: randomUUID(),
+      authToken: randomUUID(), // Token para el protocolo Apple PassKit Web Service
       firstName: dto.firstName,
       lastName: dto.lastName,
       phone: dto.phone,

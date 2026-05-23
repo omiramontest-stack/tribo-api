@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import type { IWorker } from '../campaign/worker/CampaignWorker.js'
+import { logger } from '../logger/logger.js'
 
 const INTERVAL_MS = 7 * 24 * 60 * 60 * 1000 // weekly
 
@@ -19,7 +20,7 @@ export class WhatsAppCleanupWorker implements IWorker {
     if (this._timer) return
     void this._tick()
     this._timer = setInterval(() => { void this._tick() }, INTERVAL_MS)
-    console.log('[WhatsAppCleanup] started — running weekly')
+    logger.info('[WhatsAppCleanup] started — running weekly')
   }
 
   stop(): void {
@@ -37,7 +38,7 @@ export class WhatsAppCleanupWorker implements IWorker {
       await this._pruneAppStateSyncKeys()
       await this._pruneOrphanedKeys()
     } catch (err) {
-      console.error('[WhatsAppCleanup] error during cleanup:', err)
+      logger.error({ err }, '[WhatsAppCleanup] error during cleanup')
     } finally {
       this._running = false
     }
@@ -49,7 +50,7 @@ export class WhatsAppCleanupWorker implements IWorker {
     const { count } = await this._db.whatsAppAuthKey.deleteMany({
       where: { type: 'pre-key', updatedAt: { lt: cutoff } },
     })
-    if (count > 0) console.log(`[WhatsAppCleanup] deleted ${count} stale pre-keys`)
+    if (count > 0) logger.info({ count }, '[WhatsAppCleanup] deleted stale pre-keys')
   }
 
   // app-state-sync-key accumulates versions — keep only the most recent N per org
@@ -73,7 +74,7 @@ export class WhatsAppCleanupWorker implements IWorker {
         total += count
       }
     }
-    if (total > 0) console.log(`[WhatsAppCleanup] pruned ${total} old app-state-sync-key entries`)
+    if (total > 0) logger.info({ total }, '[WhatsAppCleanup] pruned old app-state-sync-key entries')
   }
 
   // Remove all auth keys for orgs that no longer have an active WhatsApp session
@@ -97,6 +98,6 @@ export class WhatsAppCleanupWorker implements IWorker {
     const { count } = await this._db.whatsAppAuthKey.deleteMany({
       where: { organizationId: { in: orphaned } },
     })
-    console.log(`[WhatsAppCleanup] deleted ${count} orphaned keys from ${orphaned.length} inactive orgs`)
+    logger.info({ count, inactiveOrgs: orphaned.length }, '[WhatsAppCleanup] deleted orphaned keys')
   }
 }

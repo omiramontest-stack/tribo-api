@@ -1,6 +1,26 @@
 import { z } from 'zod'
 import type { FastifyInstance } from 'fastify'
 import { authenticate, requireOrgContext } from '../middlewares/authenticate.js'
+
+/**
+ * Valida que una URL pertenezca al host permitido (FRONTEND_URL).
+ * Previene open redirects post-pago que pueden usarse para phishing.
+ */
+function isAllowedRedirectUrl(url: string): boolean {
+  try {
+    const allowed = new URL(process.env.FRONTEND_URL ?? 'http://localhost:5173')
+    const target = new URL(url)
+    return target.host === allowed.host
+  } catch {
+    return false
+  }
+}
+
+function allowedUrl() {
+  return z.string().url().refine(isAllowedRedirectUrl, {
+    message: 'URL must belong to the allowed domain',
+  })
+}
 import type { GetBillingStatusUseCase } from '../../application/billing/useCases/GetBillingStatusUseCase.js'
 import type { CreateCheckoutSessionUseCase } from '../../application/billing/useCases/CreateCheckoutSessionUseCase.js'
 import type { BuyCreditsUseCase } from '../../application/billing/useCases/BuyCreditsUseCase.js'
@@ -10,14 +30,14 @@ import type { StripeService } from '../../infrastructure/billing/stripe/StripeSe
 
 const checkoutSchema = z.object({
   planSlug: z.enum(['base', 'pro']),
-  successUrl: z.string().url(),
-  cancelUrl: z.string().url(),
+  successUrl: allowedUrl(),
+  cancelUrl: allowedUrl(),
 })
 
 const buyCreditsSchema = z.object({
   packId: z.string(),
-  successUrl: z.string().url(),
-  cancelUrl: z.string().url(),
+  successUrl: allowedUrl(),
+  cancelUrl: allowedUrl(),
 })
 
 export function billingRoutes(
@@ -86,7 +106,11 @@ export function billingRoutes(
       })
 
       authed.post('/billing/portal', async (request, reply) => {
-        const returnUrl = (request.body as { returnUrl?: string })?.returnUrl ?? process.env.FRONTEND_URL ?? '/'
+        const rawReturnUrl = (request.body as { returnUrl?: string })?.returnUrl
+        // Validar que el returnUrl pertenezca al dominio permitido antes de pasarlo a Stripe
+        const returnUrl = rawReturnUrl && isAllowedRedirectUrl(rawReturnUrl)
+          ? rawReturnUrl
+          : process.env.FRONTEND_URL ?? '/'
         const subscription = await billingRepo.findSubscriptionByOrg(request.admin.organizationId!)
         if (!subscription?.stripeCustomerId) {
           return reply.code(404).send({ error: 'NO_CUSTOMER', message: 'No Stripe customer found' })

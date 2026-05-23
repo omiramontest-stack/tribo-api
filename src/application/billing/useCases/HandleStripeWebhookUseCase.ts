@@ -1,6 +1,7 @@
 import type { BillingRepository } from '../../../domain/billing/repository/BillingRepository.js'
 import type { StripeService, StripeWebhookPayload } from '../../../infrastructure/billing/stripe/StripeService.js'
 import type { PlanSlug } from '../../../domain/billing/entities/Plan.js'
+import { invalidatePlanCache } from '../../../http/middlewares/checkPlan.js'
 
 export class HandleStripeWebhookUseCase {
   constructor(
@@ -16,6 +17,12 @@ export class HandleStripeWebhookUseCase {
 
     await this._handleEvent(event)
     await this._billingRepo.markWebhookEventProcessed(event.id, event.type)
+  }
+
+  /** Invalida el cache de plan en memoria después de procesar cualquier evento
+   *  que pueda cambiar el estado de suscripción de una organización. */
+  private _invalidateCacheIfNeeded(organizationId: string | undefined): void {
+    if (organizationId) invalidatePlanCache(organizationId)
   }
 
   private async _handleEvent(event: StripeWebhookPayload): Promise<void> {
@@ -42,6 +49,7 @@ export class HandleStripeWebhookUseCase {
     const mode = data['mode'] as string
     const organizationId = (data['metadata'] as Record<string, string>)['organizationId']
     const customerId = data['customer'] as string
+    this._invalidateCacheIfNeeded(organizationId)
 
     if (mode === 'subscription') {
       const stripeSubscriptionId = data['subscription'] as string
@@ -90,6 +98,7 @@ export class HandleStripeWebhookUseCase {
     const stripeSubscriptionId = data['id'] as string
     const subscription = await this._billingRepo.findSubscriptionByStripeId(stripeSubscriptionId)
     if (!subscription) return
+    this._invalidateCacheIfNeeded(subscription.organizationId)
 
     const status = this._mapStripeStatus(data['status'] as string)
     const currentPeriodEnd = new Date((data['current_period_end'] as number) * 1000).toISOString()
@@ -122,6 +131,7 @@ export class HandleStripeWebhookUseCase {
     const stripeSubscriptionId = data['id'] as string
     const subscription = await this._billingRepo.findSubscriptionByStripeId(stripeSubscriptionId)
     if (!subscription) return
+    this._invalidateCacheIfNeeded(subscription.organizationId)
 
     await this._billingRepo.updateSubscription({
       ...subscription,

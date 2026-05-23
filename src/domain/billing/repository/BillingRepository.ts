@@ -19,6 +19,13 @@ export interface BillingRepository {
   addSmsCredits(organizationId: string, amount: number): Promise<void>
   deductSmsCredit(organizationId: string): Promise<boolean>
   deductSmsCredits(organizationId: string, amount: number): Promise<void>
+  /**
+   * Deduce `amount` créditos de forma atómica usando UPDATE con condición.
+   * Devuelve `true` si había suficientes créditos y se dedujeron,
+   * `false` si el balance era insuficiente (sin modificar el saldo).
+   * Previene race conditions de saldo negativo bajo concurrencia.
+   */
+  tryDeductSmsCredits(organizationId: string, amount: number): Promise<boolean>
 
   // SMS Credit Packs
   findAllActivePacks(): Promise<SmsCreditPack[]>

@@ -3,6 +3,7 @@ import 'dotenv/config'
 // set before any Date operations or subsequent module initialisation.
 import { validateEnv } from './config/env.js'
 import { buildApp } from './http/app.js'
+import { logger } from './infrastructure/logger/logger.js'
 
 validateEnv()
 
@@ -11,7 +12,7 @@ const { app, worker, whatsappManager, whatsappCleanup } = await buildApp()
 worker.start()
 whatsappCleanup.start()
 // Restore WhatsApp sessions that were connected before the last restart
-whatsappManager.restoreAll().catch(err => console.error('[WhatsApp] Failed to restore sessions:', err))
+whatsappManager.restoreAll().catch(err => logger.error({ err }, '[WhatsApp] failed to restore sessions'))
 
 const shutdown = async () => {
   worker.stop()

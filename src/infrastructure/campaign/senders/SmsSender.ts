@@ -1,4 +1,5 @@
 import type { ISender, SendPayload } from './ISender.js'
+import { logger } from '../../logger/logger.js'
 
 export class SmsSender implements ISender {
   async send(payload: SendPayload): Promise<void> {
@@ -6,7 +7,7 @@ export class SmsSender implements ISender {
     const fromNumber = process.env.TELNYX_PHONE_NUMBER
 
     if (!apiKey || !fromNumber) {
-      console.log(`[SmsSender] Not configured — skipping SMS to ${payload.to}`)
+      logger.warn({ to: payload.to }, '[SmsSender] not configured — skipping')
       return
     }
 
