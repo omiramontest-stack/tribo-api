@@ -248,7 +248,17 @@ export function appleRoutes(
       if (!authToken) return reply.code(401).send()
 
       const pass = await passRepo.findByTokenAndAuthToken(serialNumber, authToken)
-      if (!pass) return reply.code(401).send()
+
+      if (!pass) {
+        // Verificar si el pass existe pero fue soft-deleted (daypass escaneado).
+        // Según el protocolo Apple PassKit, 410 Gone le indica al iPhone que debe
+        // eliminar automáticamente el pass del Wallet del usuario.
+        const deleted = await db.pass.findUnique({ where: { token: serialNumber } })
+        if (deleted?.authToken === authToken && deleted.deletedAt !== null) {
+          return reply.code(410).send()
+        }
+        return reply.code(401).send()
+      }
 
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send()

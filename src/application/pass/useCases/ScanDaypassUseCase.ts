@@ -4,6 +4,7 @@ import type { WalletRepository } from '../../../domain/wallet/repository/WalletR
 import type { PassEventRepository } from '../../../domain/analytics/repository/PassEventRepository.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
+import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
 
 export interface ScanDaypassDto {
   token: string
@@ -38,7 +39,17 @@ export class ScanDaypassUseCase implements UseCase<ScanDaypassDto, ScanDaypassRe
 
     pass.data = { type: 'daypass', used: true }
     await this._passRepository.update(pass)
+
+    // Obtener push tokens ANTES del soft-delete (aunque deviceRegistration no filtra por
+    // deletedAt, es más claro hacerlo antes; también permite enviar el push primero).
+    const pushTokens = await this._passRepository.findPushTokensByPassToken(pass.token)
+
+    // Soft-delete — mueve el pass a la lista de "escaneados" en el dashboard de admin.
     await this._passRepository.delete(pass.id)
+
+    // Notificar a Apple: el iPhone llamará a GET /v1/passes/… y recibirá 410 Gone,
+    // lo que le indica que debe eliminar el pass del Wallet automáticamente.
+    await sendPassUpdateNotification(pushTokens)
 
     await this._passEventRepository.save({
       id: randomUUID(),

@@ -21,7 +21,7 @@ export function buildBasePassJson(wallet: Wallet, pass: Pass) {
     foregroundColor: 'rgb(255,255,255)',
     labelColor: 'rgb(255,255,255)',
     webServiceURL: `${API_URL}/`,
-    authenticationToken: pass.token,
+    authenticationToken: pass.authToken,
     barcodes: [
       {
         message: `${API_URL}/w/${pass.token}`,
