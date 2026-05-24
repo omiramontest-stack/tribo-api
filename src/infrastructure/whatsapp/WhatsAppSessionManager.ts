@@ -160,71 +160,90 @@ export class WhatsAppSessionManager {
     }
     this._sessions.set(orgId, entry)
 
-    sock.ev.on('creds.update', saveCreds)
-
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update
-
-      if (qr) {
-        entry.qr = qr
-        entry.status = 'qr_pending'
-        logger.info({ orgId }, '[WhatsApp] QR ready')
-        this._emit(orgId, 'qr', { qr })
-
-        if (entry.qrTimer) clearTimeout(entry.qrTimer)
-        entry.qrTimer = setTimeout(() => {
-          if (entry.status === 'qr_pending') {
-            logger.info({ orgId }, '[WhatsApp] QR timeout — destroying')
-            this._emit(orgId, 'disconnected', {})
-            this._destroyEntry(orgId)
-          }
-        }, QR_SESSION_TIMEOUT_MS)
-      }
-
-      if (connection === 'open') {
-        if (entry.qrTimer) { clearTimeout(entry.qrTimer); entry.qrTimer = null }
-        entry.status = 'connected'
-        entry.qr = null
-        entry.reconnectAttempt = 0  // reset backoff on successful connection
-        const phone = sock.user?.id?.split(':')[0] ?? null
-        entry.phone = phone
-        logger.info({ orgId, phone: phone ? maskPhone(phone) : 'unknown' }, '[WhatsApp] connected')
-        this._emit(orgId, 'connected', { phone })
-
-        await this._db.whatsAppSession.upsert({
-          where: { organizationId: orgId },
-          create: { organizationId: orgId, phone },
-          update: { phone },
-        }).catch(err => logger.error({ err, orgId }, '[WhatsApp] db upsert failed'))
-      }
-
-      if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-        logger.info({ orgId, statusCode }, '[WhatsApp] disconnected')
-
-        if (statusCode === DisconnectReason.loggedOut) {
-          this._emit(orgId, 'disconnected', {})
-          await this._destroyEntry(orgId)
-          await Promise.all([
-            this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } }),
-            this._db.whatsAppAuthCreds.deleteMany({ where: { organizationId: orgId } }),
-            this._db.whatsAppAuthKey.deleteMany({ where: { organizationId: orgId } }),
-          ]).catch(() => {})
-        } else {
-          entry.status = 'disconnected'
-          const delay = reconnectDelay(entry.reconnectAttempt++)
-          this._emit(orgId, 'reconnecting', { delayMs: delay })
-          logger.info({ orgId, attempt: entry.reconnectAttempt, delayMs: delay }, '[WhatsApp] scheduling reconnect')
-          setTimeout(() => {
-            if (this._sessions.get(orgId)?.status === 'disconnected') {
-              this._connect(orgId).catch(err =>
-                logger.error({ err, orgId }, '[WhatsApp] reconnect failed'),
-              )
-            }
-          }, delay)
-        }
-      }
+    // saveCreds es async — si falla dentro del EventEmitter se convierte en
+    // unhandledRejection. Lo envolvemos para que el error quede en los logs
+    // sin crashear el proceso.
+    sock.ev.on('creds.update', () => {
+      saveCreds().catch(err => logger.error({ err, orgId }, '[WhatsApp] saveCreds failed'))
     })
+
+    // connection.update también es async (escribe en DB). Mismo problema.
+    sock.ev.on('connection.update', (update) => {
+      this._handleConnectionUpdate(orgId, entry, sock, update).catch(err =>
+        logger.error({ err, orgId }, '[WhatsApp] connection.update handler failed'),
+      )
+    })
+  }
+
+  private async _handleConnectionUpdate(
+    orgId: string,
+    entry: SessionEntry,
+    sock: SessionEntry['sock'],
+    update: { connection?: string; lastDisconnect?: { error?: unknown }; qr?: string },
+  ): Promise<void> {
+    const { connection, lastDisconnect, qr } = update
+
+    if (qr) {
+      entry.qr = qr
+      entry.status = 'qr_pending'
+      logger.info({ orgId }, '[WhatsApp] QR ready')
+      this._emit(orgId, 'qr', { qr })
+
+      if (entry.qrTimer) clearTimeout(entry.qrTimer)
+      entry.qrTimer = setTimeout(() => {
+        if (entry.status === 'qr_pending') {
+          logger.info({ orgId }, '[WhatsApp] QR timeout — destroying')
+          this._emit(orgId, 'disconnected', {})
+          this._destroyEntry(orgId).catch(err =>
+            logger.error({ err, orgId }, '[WhatsApp] destroyEntry on QR timeout failed'),
+          )
+        }
+      }, QR_SESSION_TIMEOUT_MS)
+    }
+
+    if (connection === 'open') {
+      if (entry.qrTimer) { clearTimeout(entry.qrTimer); entry.qrTimer = null }
+      entry.status = 'connected'
+      entry.qr = null
+      entry.reconnectAttempt = 0
+      const phone = sock.user?.id?.split(':')[0] ?? null
+      entry.phone = phone
+      logger.info({ orgId, phone: phone ? maskPhone(phone) : 'unknown' }, '[WhatsApp] connected')
+      this._emit(orgId, 'connected', { phone })
+
+      await this._db.whatsAppSession.upsert({
+        where: { organizationId: orgId },
+        create: { organizationId: orgId, phone },
+        update: { phone },
+      }).catch(err => logger.error({ err, orgId }, '[WhatsApp] db upsert failed'))
+    }
+
+    if (connection === 'close') {
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+      logger.info({ orgId, statusCode }, '[WhatsApp] disconnected')
+
+      if (statusCode === DisconnectReason.loggedOut) {
+        this._emit(orgId, 'disconnected', {})
+        await this._destroyEntry(orgId)
+        await Promise.all([
+          this._db.whatsAppSession.deleteMany({ where: { organizationId: orgId } }),
+          this._db.whatsAppAuthCreds.deleteMany({ where: { organizationId: orgId } }),
+          this._db.whatsAppAuthKey.deleteMany({ where: { organizationId: orgId } }),
+        ]).catch(() => {})
+      } else {
+        entry.status = 'disconnected'
+        const delay = reconnectDelay(entry.reconnectAttempt++)
+        this._emit(orgId, 'reconnecting', { delayMs: delay })
+        logger.info({ orgId, attempt: entry.reconnectAttempt, delayMs: delay }, '[WhatsApp] scheduling reconnect')
+        setTimeout(() => {
+          if (this._sessions.get(orgId)?.status === 'disconnected') {
+            this._connect(orgId).catch(err =>
+              logger.error({ err, orgId }, '[WhatsApp] reconnect failed'),
+            )
+          }
+        }, delay)
+      }
+    }
   }
 
   private async _destroyEntry(orgId: string): Promise<void> {

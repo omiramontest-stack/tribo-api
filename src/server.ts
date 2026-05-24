@@ -5,6 +5,18 @@ import { validateEnv } from './config/env.js'
 import { buildApp } from './http/app.js'
 import { logger } from './infrastructure/logger/logger.js'
 
+// Capturar errores no manejados ANTES de cualquier otra inicialización.
+// En Node 15+, un unhandledRejection crashea el proceso sin log — con este
+// handler al menos queda registrado en los logs antes de que Docker reinicie.
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ reason }, 'Unhandled promise rejection — shutting down')
+  process.exit(1)
+})
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'Uncaught exception — shutting down')
+  process.exit(1)
+})
+
 validateEnv()
 
 const { app, worker, whatsappManager, whatsappCleanup } = await buildApp()

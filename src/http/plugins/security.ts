@@ -2,6 +2,8 @@ import fp from 'fastify-plugin'
 import helmet from '@fastify/helmet'
 import type { FastifyInstance } from 'fastify'
 
+const isProd = process.env.NODE_ENV === 'production'
+
 export default fp(async (app: FastifyInstance) => {
   await app.register(helmet, {
     // Allow Apple Wallet and Google Wallet passes to be served
@@ -15,14 +17,18 @@ export default fp(async (app: FastifyInstance) => {
         connectSrc: ["'self'"],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
+        // Solo en producción: fuerza HTTP→HTTPS en el browser.
+        // En desarrollo provoca que el browser intente HTTPS en localhost/ngrok
+        // y rompe todas las requests cuando el túnel cambia de URL.
+        ...(isProd ? { upgradeInsecureRequests: [] } : {}),
       },
     },
-    hsts: {
-      maxAge: 31_536_000,
-      includeSubDomains: true,
-      preload: true,
-    },
+    // HSTS solo en producción: en dev el browser cachea el dominio como
+    // HTTPS-only por 1 año, lo que mata todas las requests cuando ngrok
+    // cambia de URL o el servidor corre en HTTP.
+    hsts: isProd
+      ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
+      : false,
   })
 
   // Limit request body to 1MB globally
