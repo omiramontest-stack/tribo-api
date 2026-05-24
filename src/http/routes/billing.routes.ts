@@ -17,8 +17,9 @@ function isAllowedRedirectUrl(url: string): boolean {
 }
 
 function allowedUrl() {
+  const expectedHost = new URL(process.env.FRONTEND_URL ?? 'http://localhost:5173').host
   return z.string().url().refine(isAllowedRedirectUrl, {
-    message: 'URL must belong to the allowed domain',
+    message: `URL must belong to the allowed domain (expected host: ${expectedHost})`,
   })
 }
 import type { GetBillingStatusUseCase } from '../../application/billing/useCases/GetBillingStatusUseCase.js'
