@@ -11,6 +11,7 @@ export default fp(async (app: FastifyInstance) => {
     origin: origins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-organization-id', 'ngrok-skip-browser-warning'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-organization-id', 'x-request-id', 'x-trace-id', 'ngrok-skip-browser-warning'],
+    exposedHeaders: ['x-request-id', 'x-trace-id'],
   })
 })
