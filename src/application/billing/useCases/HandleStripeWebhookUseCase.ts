@@ -103,8 +103,26 @@ export class HandleStripeWebhookUseCase {
     const status = this._mapStripeStatus(data['status'] as string)
     const currentPeriodEnd = new Date((data['current_period_end'] as number) * 1000).toISOString()
 
+    // Detectar cambio de plan (upgrade/downgrade vía Customer Portal)
+    const items = data['items'] as { data: Array<{ price: { id: string; metadata?: Record<string, string> } }> } | undefined
+    const newPriceId = items?.data?.[0]?.price?.id
+    const newPlanSlug = items?.data?.[0]?.price?.metadata?.['planSlug'] as PlanSlug | undefined
+
+    let planId = subscription.planId
+    let stripePriceId = subscription.stripePriceId
+
+    if (newPriceId && newPriceId !== subscription.stripePriceId && newPlanSlug) {
+      const newPlan = await this._billingRepo.findPlanBySlug(newPlanSlug)
+      if (newPlan) {
+        planId = newPlan.id
+        stripePriceId = newPriceId
+      }
+    }
+
     await this._billingRepo.updateSubscription({
       ...subscription,
+      planId,
+      stripePriceId,
       status,
       currentPeriodEnd,
       cancelledAt: status === 'active' ? null : subscription.cancelledAt,

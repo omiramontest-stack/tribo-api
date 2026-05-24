@@ -23,6 +23,16 @@ export class CreateCheckoutSessionUseCase {
     if (!plan.stripePriceId) throw new AppError('PLAN_NOT_CONFIGURED', 'Plan has no Stripe price', 500)
 
     const subscription = await this._billingRepo.findSubscriptionByOrg(dto.organizationId)
+
+    // Guard: evitar suscripciones duplicadas — si ya está activo, usar el portal para cambiar de plan
+    if (subscription?.status === 'active') {
+      throw new AppError(
+        'ALREADY_SUBSCRIBED',
+        'Ya tienes una suscripción activa. Usa el portal de facturación para cambiar de plan.',
+        409,
+      )
+    }
+
     const stripeCustomerId = subscription?.stripeCustomerId ?? undefined
 
     const url = await this._stripeService.createCheckoutSession({

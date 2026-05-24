@@ -6,10 +6,12 @@
  *   - checkout.session.completed (subscription mode) → saves/updates subscription
  *   - customer.subscription.deleted → marks subscription as cancelled
  *   - invoice.payment_failed → marks subscription as past_due
+ *   - customer.subscription.updated → detects plan change (upgrade/downgrade) and updates planId + stripePriceId
  *   - Cache is invalidated on subscription changes
  */
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import { HandleStripeWebhookUseCase } from '../application/billing/useCases/HandleStripeWebhookUseCase.js'
+import { CreateCheckoutSessionUseCase } from '../application/billing/useCases/CreateCheckoutSessionUseCase.js'
 import type { BillingRepository } from '../domain/billing/repository/BillingRepository.js'
 import type { StripeService } from '../infrastructure/billing/stripe/StripeService.js'
 import type { Plan } from '../domain/billing/entities/Plan.js'
@@ -27,6 +29,23 @@ const PLAN: Plan = {
   emailCampaigns: true,
   smsCampaigns: false,
   analyticsLevel: 'basic',
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}
+
+const PRO_PLAN: Plan = {
+  id: 'plan-pro',
+  slug: 'pro',
+  name: 'Pro',
+  price: 99,
+  currency: 'USD',
+  stripePriceId: 'price_pro_xyz',
+  maxWallets: 50,
+  maxPasses: null,
+  emailCampaigns: true,
+  smsCampaigns: true,
+  analyticsLevel: 'full',
   isActive: true,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -160,6 +179,142 @@ describe('HandleStripeWebhookUseCase', () => {
       await useCase.run(Buffer.from('{}'), 'sig')
 
       expect(repo.markWebhookEventProcessed).toHaveBeenCalledWith('evt_del_2', 'customer.subscription.deleted')
+    })
+  })
+
+  describe('customer.subscription.updated — plan change (upgrade/downgrade)', () => {
+    it('updates planId and stripePriceId when the price changes (base → pro via portal)', async () => {
+      const repo = makeBillingRepo({
+        findSubscriptionByStripeId: mock(async () => ({ ...SUBSCRIPTION })),
+        findPlanBySlug: mock(async (slug: string) => slug === 'pro' ? PRO_PLAN : PLAN),
+      })
+      const stripe = makeStripeService({
+        verifyWebhook: mock(async () => ({
+          id: 'evt_upg_1',
+          type: 'customer.subscription.updated',
+          data: {
+            id: 'sub_abc',
+            status: 'active',
+            current_period_end: Math.floor(Date.now() / 1000) + 86400 * 15,
+            items: {
+              data: [
+                {
+                  price: {
+                    id: 'price_pro_xyz',
+                    metadata: { planSlug: 'pro' },
+                  },
+                },
+              ],
+            },
+          },
+        })),
+      })
+      const useCase = new HandleStripeWebhookUseCase(repo, stripe)
+      await useCase.run(Buffer.from('{}'), 'sig')
+
+      const updateCall = (repo.updateSubscription as ReturnType<typeof mock>).mock.calls[0][0]
+      expect(updateCall.planId).toBe('plan-pro')
+      expect(updateCall.stripePriceId).toBe('price_pro_xyz')
+      expect(updateCall.status).toBe('active')
+    })
+
+    it('keeps existing planId when priceId has not changed', async () => {
+      const repo = makeBillingRepo({
+        findSubscriptionByStripeId: mock(async () => ({ ...SUBSCRIPTION })),
+        findPlanBySlug: mock(async () => PLAN),
+      })
+      const stripe = makeStripeService({
+        verifyWebhook: mock(async () => ({
+          id: 'evt_upd_same',
+          type: 'customer.subscription.updated',
+          data: {
+            id: 'sub_abc',
+            status: 'active',
+            current_period_end: Math.floor(Date.now() / 1000) + 86400 * 30,
+            items: {
+              data: [
+                {
+                  price: {
+                    // mismo priceId que SUBSCRIPTION.stripePriceId → no cambia plan
+                    id: 'price_abc',
+                    metadata: { planSlug: 'base' },
+                  },
+                },
+              ],
+            },
+          },
+        })),
+      })
+      const useCase = new HandleStripeWebhookUseCase(repo, stripe)
+      await useCase.run(Buffer.from('{}'), 'sig')
+
+      const updateCall = (repo.updateSubscription as ReturnType<typeof mock>).mock.calls[0][0]
+      expect(updateCall.planId).toBe('plan-1')
+      expect(updateCall.stripePriceId).toBe('price_abc')
+    })
+  })
+})
+
+describe('CreateCheckoutSessionUseCase', () => {
+  describe('guard: suscripción activa existente', () => {
+    it('lanza ALREADY_SUBSCRIBED (409) si ya hay suscripción activa', async () => {
+      const repo = makeBillingRepo({
+        findPlanBySlug: mock(async () => PLAN),
+        findSubscriptionByOrg: mock(async () => ({ ...SUBSCRIPTION, status: 'active' as const })),
+      })
+      const stripe = makeStripeService()
+      const useCase = new CreateCheckoutSessionUseCase(repo, stripe)
+
+      await expect(
+        useCase.run({
+          organizationId: 'org-1',
+          adminId: 'admin-1',
+          planSlug: 'pro',
+          successUrl: 'https://app.example.com/success',
+          cancelUrl: 'https://app.example.com/cancel',
+        }),
+      ).rejects.toMatchObject({ code: 'ALREADY_SUBSCRIBED', statusCode: 409 })
+
+      expect(stripe.createCheckoutSession).not.toHaveBeenCalled()
+    })
+
+    it('permite checkout si la suscripción está cancelled', async () => {
+      const repo = makeBillingRepo({
+        findPlanBySlug: mock(async () => PLAN),
+        findSubscriptionByOrg: mock(async () => ({ ...SUBSCRIPTION, status: 'cancelled' as const })),
+      })
+      const stripe = makeStripeService()
+      const useCase = new CreateCheckoutSessionUseCase(repo, stripe)
+
+      const result = await useCase.run({
+        organizationId: 'org-1',
+        adminId: 'admin-1',
+        planSlug: 'base',
+        successUrl: 'https://app.example.com/success',
+        cancelUrl: 'https://app.example.com/cancel',
+      })
+
+      expect(result.url).toBeTruthy()
+      expect(stripe.createCheckoutSession).toHaveBeenCalledTimes(1)
+    })
+
+    it('permite checkout si no hay suscripción previa', async () => {
+      const repo = makeBillingRepo({
+        findPlanBySlug: mock(async () => PLAN),
+        findSubscriptionByOrg: mock(async () => null),
+      })
+      const stripe = makeStripeService()
+      const useCase = new CreateCheckoutSessionUseCase(repo, stripe)
+
+      const result = await useCase.run({
+        organizationId: 'org-new',
+        adminId: 'admin-1',
+        planSlug: 'base',
+        successUrl: 'https://app.example.com/success',
+        cancelUrl: 'https://app.example.com/cancel',
+      })
+
+      expect(result.url).toBeTruthy()
     })
   })
 })
