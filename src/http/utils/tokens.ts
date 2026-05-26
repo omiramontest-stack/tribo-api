@@ -5,15 +5,10 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
-const isProd = process.env.NODE_ENV === 'production'
-
 export const COOKIE_OPTS = {
   httpOnly: true,
-  // En producción: sameSite=none + secure=true para cookies cross-origin sobre HTTPS.
-  // En desarrollo: sameSite=lax + secure=false para que funcionen sobre HTTP/ngrok
-  // sin que el browser las bloquee o ignore cuando cambia el túnel.
-  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
-  secure: isProd,
+  sameSite: 'none' as const,
+  secure: true,
   path: '/',
 }
 
