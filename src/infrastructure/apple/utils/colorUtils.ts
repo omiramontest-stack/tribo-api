@@ -85,10 +85,10 @@ export function stripPalette(primaryColor: string) {
     /** Relleno de la barra de progreso. */
     barFill:     `rgba(${rgb},0.95)`,
     /** Overlay del contenedor interior (caja semi-transparente). */
-    container:   `rgba(${rgb},0.12)`,
+    container:   `rgba(${rgb},0.16)`,
     /** Íconos de sellos inactivos (fantasma). */
-    stampGhost:  `rgba(${rgb},0.30)`,
+    stampGhost:  `rgba(${rgb},0.42)`,
     /** Borde de sellos inactivos. */
-    stampBorder: `rgba(${rgb},0.45)`,
+    stampBorder: `rgba(${rgb},0.60)`,
   }
 }

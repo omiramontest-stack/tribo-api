@@ -1,10 +1,33 @@
-export type StampIcon = 'check' | 'star' | 'heart' | 'coffee' | 'pizza' | 'beer' | 'bolt' | 'fire' | 'crown' | 'paw'
+export type StampIcon =
+  | 'check'
+  | 'star'
+  | 'heart'
+  | 'bolt'
+  | 'fire'
+  | 'crown'
+  | 'coffee'
+  | 'pizza'
+  | 'beer'
+  | 'paw'
+  | 'burger'
+  | 'gem'
+  | 'gift'
+  | 'music'
+  | 'leaf'
+  | 'icecream'
+  | 'flower'
+  | 'custom'
 
 export interface StampsRules {
   type: 'stamps'
   totalStamps: number
   reward: string
   stampIcon?: StampIcon
+  /**
+   * SVG completo (con la etiqueta `<svg viewBox="...">…</svg>`) que se usa como ícono
+   * cuando `stampIcon === 'custom'`. Se incrusta escalado y centrado dentro del círculo.
+   */
+  stampCustomSvg?: string
   expiresInDays: number | null
 }
 

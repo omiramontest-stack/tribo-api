@@ -31,6 +31,7 @@ export class StampsStripGenerator implements StripGenerator {
       wallet.accentColor,
       rules.stampIcon,
       rules.reward,
+      rules.stampCustomSvg,
     )
     const bg = renderBackground(wallet.primaryColor, wallet.accentColor)
     return {
@@ -78,40 +79,71 @@ function computeGrid(total: number): { cols: number; rows: number } {
   return { cols: 5, rows: Math.ceil(total / 5) }
 }
 
-/**
- * Returns the SVG content to render inside an active stamp circle.
- * All icons are drawn relative to (cx, cy) with the given radius.
- *
- * Sizing rules:
- * - Text glyphs: font-size = r * 0.78 (~40% of circle diameter) — legible without overflowing.
- * - Path icons: scale s = r / 44 (~14% smaller than the old r/38 base) with vertical re-centering.
- * - `dominant-baseline="central"` gives the best vertical centering in resvg across all glyphs.
- */
-function renderActiveIcon(icon: StampIcon, cx: number, cy: number, r: number, color: string): string {
-  const fs = Math.round(r * 0.78)
-  // Use dominant-baseline="central" — better than "middle" for resvg's text layout engine.
-  const glyph = (char: string) =>
-    `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" ` +
-    `font-size="${fs}" font-family="system-ui,-apple-system,sans-serif" ` +
-    `fill="${color}" font-weight="700">${char}</text>`
+// ── Icon renderers ──────────────────────────────────────────────────────────
+// All icons are drawn relative to (cx, cy) with the given radius r.
+// Every icon uses SVG path/shape primitives — no Unicode glyphs — so they
+// render correctly with resvg regardless of available system fonts.
 
-  switch (icon) {
-    case 'star':   return glyph('★')
-    case 'heart':  return glyph('♥')
-    case 'bolt':   return glyph('⚡')
-    case 'fire':   return renderFire(cx, cy, r, color)
-    case 'crown':  return renderCrown(cx, cy, r, color)
-    case 'coffee': return renderCoffee(cx, cy, r, color)
-    case 'pizza':  return renderPizza(cx, cy, r, color)
-    case 'beer':   return renderBeer(cx, cy, r, color)
-    case 'paw':    return renderPaw(cx, cy, r, color)
-    case 'check':
-    default:       return glyph('✓')
-  }
+/** ✓ Checkmark (stroke-based) */
+function renderCheck(cx: number, cy: number, r: number, color: string): string {
+  const sw = Math.round(r * 0.13)
+  const d =
+    `M${(cx - r * 0.33).toFixed(1)},${(cy + r * 0.02).toFixed(1)}` +
+    ` L${(cx - r * 0.02).toFixed(1)},${(cy + r * 0.30).toFixed(1)}` +
+    ` L${(cx + r * 0.38).toFixed(1)},${(cy - r * 0.27).toFixed(1)}`
+  return (
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="${sw}"` +
+    ` stroke-linecap="round" stroke-linejoin="round"/>`
+  )
 }
 
+/** ★ 5-pointed star (polygon) */
+function renderStar(cx: number, cy: number, r: number, color: string): string {
+  const Ro = r * 0.44
+  const Ri = r * 0.18
+  const pts: string[] = []
+  for (let i = 0; i < 10; i++) {
+    const angle = (i * 36 - 90) * (Math.PI / 180)
+    const rad = i % 2 === 0 ? Ro : Ri
+    pts.push(
+      `${(cx + Math.cos(angle) * rad).toFixed(1)},${(cy + Math.sin(angle) * rad).toFixed(1)}`,
+    )
+  }
+  return `<polygon points="${pts.join(' ')}" fill="${color}"/>`
+}
+
+/** ♥ Heart (cubic bezier) */
+function renderHeart(cx: number, cy: number, r: number, color: string): string {
+  const s = r * 0.44
+  const yo = s * 0.2 // shift down slightly to visually center
+  const p = (x: number, y: number) =>
+    `${(cx + x * s).toFixed(1)},${(cy + y * s + yo).toFixed(1)}`
+  const d =
+    `M${p(0, 0.5)}` +
+    ` C${p(-0.5, 0.1)} ${p(-1, -0.1)} ${p(-1, -0.5)}` +
+    ` C${p(-1, -1)} ${p(-0.5, -1)} ${p(0, -0.5)}` +
+    ` C${p(0.5, -1)} ${p(1, -1)} ${p(1, -0.5)}` +
+    ` C${p(1, -0.1)} ${p(0.5, 0.1)} ${p(0, 0.5)} Z`
+  return `<path d="${d}" fill="${color}"/>`
+}
+
+/** ⚡ Lightning bolt (polygon) */
+function renderBolt(cx: number, cy: number, r: number, color: string): string {
+  const s = r * 0.44
+  const f = (x: number, y: number) =>
+    `${(cx + x * s).toFixed(1)},${(cy + y * s).toFixed(1)}`
+  const d =
+    `M${f(0.15, -1)}` +
+    ` L${f(-0.38, 0.05)}` +
+    ` L${f(0.02, 0.05)}` +
+    ` L${f(-0.15, 1)}` +
+    ` L${f(0.38, -0.05)}` +
+    ` L${f(-0.02, -0.05)} Z`
+  return `<path d="${d}" fill="${color}"/>`
+}
+
+/** 🔥 Fire (organic flame) */
 function renderFire(cx: number, cy: number, r: number, color: string): string {
-  // Reduced from r*0.7 to r*0.48 — fits cleanly inside the circle without overflowing.
   const f = r * 0.48
   const path =
     `M${cx},${cy - f} ` +
@@ -121,12 +153,12 @@ function renderFire(cx: number, cy: number, r: number, color: string): string {
   return `<path d="${path}" fill="${color}"/>`
 }
 
+/** 👑 Crown */
 function renderCrown(cx: number, cy: number, r: number, color: string): string {
-  // Scaled down ~25% (was ±0.65r wide, now ±0.48r) and re-centered vertically.
   const top = cy - r * 0.40
   const bot = cy + r * 0.44
   const mid = cy - r * 0.04
-  const left  = cx - r * 0.48
+  const left = cx - r * 0.48
   const right = cx + r * 0.48
   const path =
     `M${left},${bot} L${left},${mid} ` +
@@ -135,16 +167,15 @@ function renderCrown(cx: number, cy: number, r: number, color: string): string {
   return `<path d="${path}" fill="${color}"/>`
 }
 
+/** ☕ Coffee cup */
 function renderCoffee(cx: number, cy: number, r: number, color: string): string {
-  // Scale reduced: r/44 (~14% smaller than old r/38).
-  // Centering fix: body top moved from cy-8s to cy-4s so steam+cup spans ≈ cy±18s.
   const s = r / 44
-  const by = cy - 4 * s           // cup top (re-centered)
+  const by = cy - 4 * s
   const bx = cx - 13 * s
   const bw = 26 * s
   const bh = 22 * s
-  const hx = bx + bw              // handle start x
-  const hy = by + 5 * s           // handle start y
+  const hx = bx + bw
+  const hy = by + 5 * s
   const steam1 = `M${cx - 6 * s},${by - 4 * s} Q${cx - 3 * s},${by - 9 * s} ${cx - 6 * s},${by - 14 * s}`
   const steam2 = `M${cx + 2 * s},${by - 4 * s} Q${cx + 5 * s},${by - 9 * s} ${cx + 2 * s},${by - 14 * s}`
   return [
@@ -155,26 +186,22 @@ function renderCoffee(cx: number, cy: number, r: number, color: string): string 
   ].join('')
 }
 
+/** 🍕 Pizza slice */
 function renderPizza(cx: number, cy: number, r: number, color: string): string {
-  // Scale reduced: r/44 (~14% smaller).
-  // Centering fix: triangle was cy-28s to cy+18s (center at cy-5s).
-  // Shifted down 5s → cy-23s to cy+23s (centered at cy).
   const s = r / 44
   const top = cy - 23 * s
   const bot = cy + 23 * s
   const path = `M${cx},${top} L${cx - 24 * s},${bot} L${cx + 24 * s},${bot} Z`
   return [
     `<path d="${path}" fill="${color}"/>`,
-    `<circle cx="${cx}"           cy="${cy + 9 * s}" r="${4   * s}" fill="rgba(0,0,0,0.2)"/>`,
-    `<circle cx="${cx - 10 * s}" cy="${cy          }" r="${3.5 * s}" fill="rgba(0,0,0,0.2)"/>`,
-    `<circle cx="${cx +  9 * s}" cy="${cy +  1 * s}" r="${3   * s}" fill="rgba(0,0,0,0.2)"/>`,
+    `<circle cx="${cx}" cy="${cy + 9 * s}" r="${4 * s}" fill="rgba(0,0,0,0.2)"/>`,
+    `<circle cx="${cx - 10 * s}" cy="${cy}" r="${3.5 * s}" fill="rgba(0,0,0,0.2)"/>`,
+    `<circle cx="${cx + 9 * s}" cy="${cy + 1 * s}" r="${3 * s}" fill="rgba(0,0,0,0.2)"/>`,
   ].join('')
 }
 
+/** 🍺 Beer mug */
 function renderBeer(cx: number, cy: number, r: number, color: string): string {
-  // Scale reduced: r/44 (~14% smaller).
-  // Centering fix: body was cy-22s to cy+18s (center ≈ cy-4s including foam).
-  // Shifted down 4s → by=cy-18s, body cy-18s to cy+22s (center ≈ cy).
   const s = r / 44
   const by = cy - 18 * s
   const bx = cx - 12 * s
@@ -183,22 +210,216 @@ function renderBeer(cx: number, cy: number, r: number, color: string): string {
   const foam = `M${bx - 2 * s},${by + 4 * s} Q${cx - 8 * s},${by - 6 * s} ${cx},${by - 4 * s} Q${cx + 8 * s},${by - 6 * s} ${bx + bw + 2 * s},${by + 4 * s} Z`
   return [
     `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="${5 * s}" fill="${color}"/>`,
-    `<path d="M${bx+bw},${by+6*s} Q${bx+bw+10*s},${by+6*s} ${bx+bw+10*s},${by+16*s} Q${bx+bw+10*s},${by+26*s} ${bx+bw},${by+26*s}" fill="none" stroke="${color}" stroke-width="${3 * s}"/>`,
+    `<path d="M${bx + bw},${by + 6 * s} Q${bx + bw + 10 * s},${by + 6 * s} ${bx + bw + 10 * s},${by + 16 * s} Q${bx + bw + 10 * s},${by + 26 * s} ${bx + bw},${by + 26 * s}" fill="none" stroke="${color}" stroke-width="${3 * s}"/>`,
     `<path d="${foam}" fill="rgba(255,255,255,0.6)"/>`,
   ].join('')
 }
 
+/** 🐾 Paw print */
 function renderPaw(cx: number, cy: number, r: number, color: string): string {
-  // Scale reduced: r/44 (~14% smaller). Already nearly centered (was cy±~20s range).
   const s = r / 44
   return [
-    `<ellipse cx="${cx}"           cy="${cy + 6 * s}"  rx="${13 * s}" ry="${11 * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx - 16 * s}" cy="${cy - 4 * s}"  rx="${6 * s}"  ry="${8  * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx + 16 * s}" cy="${cy - 4 * s}"  rx="${6 * s}"  ry="${8  * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx -  7 * s}" cy="${cy - 14 * s}" rx="${5 * s}"  ry="${7  * s}" fill="${color}"/>`,
-    `<ellipse cx="${cx +  7 * s}" cy="${cy - 14 * s}" rx="${5 * s}"  ry="${7  * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx}" cy="${cy + 6 * s}" rx="${13 * s}" ry="${11 * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx - 16 * s}" cy="${cy - 4 * s}" rx="${6 * s}" ry="${8 * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx + 16 * s}" cy="${cy - 4 * s}" rx="${6 * s}" ry="${8 * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx - 7 * s}" cy="${cy - 14 * s}" rx="${5 * s}" ry="${7 * s}" fill="${color}"/>`,
+    `<ellipse cx="${cx + 7 * s}" cy="${cy - 14 * s}" rx="${5 * s}" ry="${7 * s}" fill="${color}"/>`,
   ].join('')
 }
+
+/** 🍔 Hamburger (3 layered buns + patty) */
+function renderBurger(cx: number, cy: number, r: number, color: string): string {
+  const s = r / 44
+  return [
+    // Top bun (rounded, tallish)
+    `<rect x="${cx - 13 * s}" y="${cy - 15 * s}" width="${26 * s}" height="${9 * s}" rx="${5 * s}" fill="${color}"/>`,
+    // Patty / filling (slightly wider, flat)
+    `<rect x="${cx - 15 * s}" y="${cy - 3 * s}" width="${30 * s}" height="${6 * s}" rx="${2 * s}" fill="${color}"/>`,
+    // Bottom bun
+    `<rect x="${cx - 12 * s}" y="${cy + 6 * s}" width="${24 * s}" height="${9 * s}" rx="${4 * s}" fill="${color}"/>`,
+  ].join('')
+}
+
+/** 💎 Gem / Diamond */
+function renderGem(cx: number, cy: number, r: number, color: string): string {
+  const s = r * 0.44
+  const f = (x: number, y: number) =>
+    `${(cx + x * s).toFixed(1)},${(cy + y * s).toFixed(1)}`
+  // 7-point classic cut gem: flat table top → wide girdle → culet point
+  const d =
+    `M${f(-0.30, -1)}` +    // table left
+    ` L${f(0.30, -1)}` +    // table right
+    ` L${f(1, -0.28)}` +    // upper-right shoulder
+    ` L${f(0.62, 0.12)}` +  // right girdle
+    ` L${f(0, 1)}` +         // culet (bottom point)
+    ` L${f(-0.62, 0.12)}` + // left girdle
+    ` L${f(-1, -0.28)} Z`   // upper-left shoulder
+  return `<path d="${d}" fill="${color}"/>`
+}
+
+/** 🎁 Gift box with bow */
+function renderGift(cx: number, cy: number, r: number, color: string): string {
+  const s = r / 44
+  const lidTop = cy - 11 * s
+  const lidBot = cy - 1 * s
+  const bh = 18 * s
+  const sw = 3.5 * s // stroke width for bow arcs
+  return [
+    // Box body
+    `<rect x="${cx - 12 * s}" y="${lidBot}" width="${24 * s}" height="${bh}" rx="${2 * s}" fill="${color}"/>`,
+    // Lid (slightly wider)
+    `<rect x="${cx - 14 * s}" y="${lidTop}" width="${28 * s}" height="${10 * s}" rx="${2 * s}" fill="${color}"/>`,
+    // Bow — left loop
+    `<path d="M${cx},${lidTop} Q${cx - 12 * s},${lidTop - 7 * s} ${cx - 5 * s},${lidTop - 1 * s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`,
+    // Bow — right loop
+    `<path d="M${cx},${lidTop} Q${cx + 12 * s},${lidTop - 7 * s} ${cx + 5 * s},${lidTop - 1 * s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`,
+  ].join('')
+}
+
+/** 🎵 Music note (filled head + stem + flag) */
+function renderMusic(cx: number, cy: number, r: number, color: string): string {
+  const s = r / 44
+  const nhCx = cx - 4 * s        // note-head center x
+  const nhCy = cy + 13 * s        // note-head center y
+  const stemTop = cy - 17 * s     // top of stem
+  const stemRight = nhCx + 8 * s  // right edge of stem
+  const sw = 3 * s
+  return [
+    // Note head (slightly tilted ellipse)
+    `<ellipse cx="${nhCx}" cy="${nhCy}" rx="${9 * s}" ry="${6.5 * s}" transform="rotate(-15 ${nhCx} ${nhCy})" fill="${color}"/>`,
+    // Stem (vertical bar from head right edge up)
+    `<rect x="${stemRight}" y="${stemTop}" width="${sw}" height="${nhCy - stemTop}" fill="${color}"/>`,
+    // Flag (curved line from stem top)
+    `<path d="M${stemRight + sw},${stemTop} Q${stemRight + sw + 14 * s},${stemTop + 8 * s} ${stemRight + sw + 8 * s},${stemTop + 18 * s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`,
+  ].join('')
+}
+
+/** 🍃 Leaf */
+function renderLeaf(cx: number, cy: number, r: number, color: string): string {
+  const s = r * 0.46
+  const topY = cy - s * 0.95
+  const botY = cy + s * 0.95
+  // Pointed-oval leaf shape using symmetric cubic beziers
+  const path =
+    `M${cx.toFixed(1)},${topY.toFixed(1)}` +
+    ` C${(cx + s).toFixed(1)},${(cy - s * 0.2).toFixed(1)} ${(cx + s).toFixed(1)},${(cy + s * 0.2).toFixed(1)} ${cx.toFixed(1)},${botY.toFixed(1)}` +
+    ` C${(cx - s).toFixed(1)},${(cy + s * 0.2).toFixed(1)} ${(cx - s).toFixed(1)},${(cy - s * 0.2).toFixed(1)} ${cx.toFixed(1)},${topY.toFixed(1)} Z`
+  // Center vein
+  const vein =
+    `M${cx.toFixed(1)},${(topY + s * 0.1).toFixed(1)} L${cx.toFixed(1)},${(botY - s * 0.1).toFixed(1)}`
+  return [
+    `<path d="${path}" fill="${color}"/>`,
+    `<path d="${vein}" fill="none" stroke="rgba(0,0,0,0.18)" stroke-width="${(r * 0.06).toFixed(1)}" stroke-linecap="round"/>`,
+  ].join('')
+}
+
+/** 🍦 Ice cream cone */
+function renderIcecream(cx: number, cy: number, r: number, color: string): string {
+  const s = r / 44
+  const scoopCy = cy - 10 * s   // center of scoop circle
+  const scoopR = 13 * s          // scoop radius
+  const coneTopY = cy + 2 * s    // where scoop meets cone
+  const coneTipY = cy + 22 * s   // tip of cone
+  const coneHW = 14 * s          // half-width of cone at top
+  return [
+    // Cone triangle (pointing down)
+    `<path d="M${cx - coneHW},${coneTopY} L${cx + coneHW},${coneTopY} L${cx},${coneTipY} Z" fill="${color}"/>`,
+    // Waffle grid hint on cone
+    `<path d="M${cx - coneHW * 0.7},${coneTopY + 5 * s} L${cx + coneHW * 0.7},${coneTopY + 5 * s}" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="${1.5 * s}"/>`,
+    `<path d="M${cx - coneHW * 0.4},${coneTopY + 12 * s} L${cx + coneHW * 0.4},${coneTopY + 12 * s}" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="${1.5 * s}"/>`,
+    // Scoop (circle)
+    `<circle cx="${cx}" cy="${scoopCy}" r="${scoopR}" fill="${color}"/>`,
+  ].join('')
+}
+
+/**
+ * Custom SVG icon.
+ *
+ * Acepta un SVG completo (etiqueta `<svg viewBox="...">…</svg>`) y lo incrusta
+ * escalado y centrado dentro del círculo de sello.
+ *
+ * - Si el SVG tiene `viewBox`, se usa para escalar correctamente.
+ * - Si no tiene `viewBox`, se asume `0 0 24 24` (estándar de íconos).
+ * - Los colores del SVG original se preservan tal cual.
+ */
+function renderCustom(svgContent: string, cx: number, cy: number, r: number): string {
+  // Extraer viewBox del SVG (si existe)
+  const vbMatch = svgContent.match(/viewBox=["']([^"']+)["']/i)
+  const viewBox = vbMatch ? vbMatch[1] : '0 0 24 24'
+
+  // Extraer el contenido interno (sin el tag <svg ...> externo)
+  const inner = svgContent
+    .replace(/<svg[^>]*>/gi, '')
+    .replace(/<\/svg>/gi, '')
+    .trim()
+
+  if (!inner) return ''
+
+  // Padding del 12 % del radio para que el ícono no roce el borde del círculo
+  const pad = r * 0.12
+  const size = (r - pad) * 2
+  const x = cx - r + pad
+  const y = cy - r + pad
+
+  return `<svg x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${size.toFixed(1)}" height="${size.toFixed(1)}" viewBox="${viewBox}">${inner}</svg>`
+}
+
+/** 🌸 Flower (5 petal circles + center) */
+function renderFlower(cx: number, cy: number, r: number, color: string): string {
+  const s = r * 0.44
+  const dist = s * 0.50     // petal center distance from origin
+  const petalR = s * 0.43   // petal circle radius
+  let petals = ''
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2 - Math.PI / 2
+    const px = cx + Math.cos(angle) * dist
+    const py = cy + Math.sin(angle) * dist
+    petals += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${petalR.toFixed(1)}" fill="${color}"/>`
+  }
+  // Center circle (slightly smaller than petals to show petal overlap)
+  petals += `<circle cx="${cx}" cy="${cy}" r="${(s * 0.30).toFixed(1)}" fill="${color}"/>`
+  return petals
+}
+
+// ── Active icon dispatcher ──────────────────────────────────────────────────
+
+/**
+ * Returns the SVG elements to render inside a stamp circle.
+ * All built-in icons are pure SVG paths — no Unicode text — for reliable resvg rendering.
+ * When `icon === 'custom'`, embeds the caller-provided `customSvg` string scaled to the circle.
+ */
+function renderActiveIcon(
+  icon: StampIcon,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string,
+  customSvg?: string,
+): string {
+  switch (icon) {
+    case 'star':     return renderStar(cx, cy, r, color)
+    case 'heart':    return renderHeart(cx, cy, r, color)
+    case 'bolt':     return renderBolt(cx, cy, r, color)
+    case 'fire':     return renderFire(cx, cy, r, color)
+    case 'crown':    return renderCrown(cx, cy, r, color)
+    case 'coffee':   return renderCoffee(cx, cy, r, color)
+    case 'pizza':    return renderPizza(cx, cy, r, color)
+    case 'beer':     return renderBeer(cx, cy, r, color)
+    case 'paw':      return renderPaw(cx, cy, r, color)
+    case 'burger':   return renderBurger(cx, cy, r, color)
+    case 'gem':      return renderGem(cx, cy, r, color)
+    case 'gift':     return renderGift(cx, cy, r, color)
+    case 'music':    return renderMusic(cx, cy, r, color)
+    case 'leaf':     return renderLeaf(cx, cy, r, color)
+    case 'icecream': return renderIcecream(cx, cy, r, color)
+    case 'flower':   return renderFlower(cx, cy, r, color)
+    case 'custom':   return renderCustom(customSvg ?? '', cx, cy, r)
+    case 'check':
+    default:         return renderCheck(cx, cy, r, color)
+  }
+}
+
+// ── Circle grid builder ─────────────────────────────────────────────────────
 
 function buildCircles(
   current: number,
@@ -206,11 +427,11 @@ function buildCircles(
   primaryColor: string,
   cols: number,
   icon: StampIcon,
+  customSvg?: string,
 ): string {
   const palette = stripPalette(primaryColor)
 
-  // Ícono activo: siempre sobre fondo blanco → usa el color de la marca si contrasta,
-  // si no, negro. Nunca blanco sobre blanco.
+  // Active icon color: brand color when it contrasts well on white; otherwise near-black.
   const activeIconColor = iconColorOnWhite(primaryColor)
 
   let circles = ''
@@ -227,18 +448,20 @@ function buildCircles(
     const cy = PAD_TOP + CIRCLE_R + row * CIRCLE_STEP
 
     if (i < current) {
-      // Sello canjeado: círculo blanco sólido + ícono que contrasta contra blanco
-      circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="rgba(255,255,255,0.95)"/>`
-      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, activeIconColor)
+      // ── Stamped: bright white circle + colored icon ──────────────────────
+      circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="rgba(255,255,255,0.97)"/>`
+      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, activeIconColor, customSvg)
     } else {
-      // Sello pendiente: círculo fantasma + ícono fantasma, ambos usando la paleta del strip
+      // ── Pending: ghost circle with clearly visible border + faint icon ───
       circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="${palette.container}" stroke="${palette.stampBorder}" stroke-width="2.5"/>`
-      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, palette.stampGhost)
+      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, palette.stampGhost, customSvg)
     }
   }
 
   return circles
 }
+
+// ── Public builders ─────────────────────────────────────────────────────────
 
 export function buildStampsStrip(
   current: number,
@@ -247,18 +470,16 @@ export function buildStampsStrip(
   accentColor: string,
   icon: StampIcon = 'check',
   reward = '',
+  customSvg?: string,
 ): Buffer {
   const { cols, rows } = computeGrid(total)
   const totalGridH = rows * CIRCLE_STEP - CIRCLE_GAP
   const H = PAD_TOP + totalGridH + TEXT_PAD + TEXT_SIZE + PAD_BOTTOM
 
-  const circles = buildCircles(current, total, primaryColor, cols, icon)
+  const circles = buildCircles(current, total, primaryColor, cols, icon, customSvg)
   const palette = stripPalette(primaryColor)
 
-  // Caption: "2 / 5 — Un producto gratis"
-  const caption = reward
-    ? `${current} / ${total} — ${reward}`
-    : `${current} / ${total}`
+  const caption = reward ? `${current} / ${total} — ${reward}` : `${current} / ${total}`
   const captionY = PAD_TOP + totalGridH + TEXT_PAD + TEXT_SIZE
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${STRIP_W}" height="${H}">
@@ -293,8 +514,9 @@ export function buildStampsStripSet(
   accentColor: string,
   icon: StampIcon = 'check',
   reward = '',
+  customSvg?: string,
 ): Record<string, Buffer> {
-  const strip = buildStampsStrip(current, total, primaryColor, accentColor, icon, reward)
+  const strip = buildStampsStrip(current, total, primaryColor, accentColor, icon, reward, customSvg)
   return {
     'strip.png': strip,
     'strip@2x.png': strip,

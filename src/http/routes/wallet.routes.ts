@@ -5,11 +5,43 @@ import type { GetWalletsUseCase } from '../../application/wallet/useCases/GetWal
 import type { GetWalletByIdUseCase } from '../../application/wallet/useCases/GetWalletByIdUseCase.js'
 import type { DeleteWalletUseCase } from '../../application/wallet/useCases/DeleteWalletUseCase.js'
 import type { WalletRepository } from '../../domain/wallet/repository/WalletRepository.js'
+import type { StampIcon } from '../../domain/wallet/entities/WalletRules.js'
 import { authenticate, requireOrgContext } from '../middlewares/authenticate.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
 
+/** Catálogo completo de íconos de sello disponibles. */
+export const STAMP_ICONS = [
+  { id: 'check',    label: 'Check',        emoji: '✔️',  category: 'general'    },
+  { id: 'star',     label: 'Estrella',     emoji: '⭐',  category: 'general'    },
+  { id: 'heart',    label: 'Corazón',      emoji: '❤️',  category: 'general'    },
+  { id: 'bolt',     label: 'Rayo',         emoji: '⚡',  category: 'general'    },
+  { id: 'fire',     label: 'Fuego',        emoji: '🔥',  category: 'general'    },
+  { id: 'crown',    label: 'Corona',       emoji: '👑',  category: 'general'    },
+  { id: 'gem',      label: 'Gema',         emoji: '💎',  category: 'general'    },
+  { id: 'gift',     label: 'Regalo',       emoji: '🎁',  category: 'general'    },
+  { id: 'music',    label: 'Música',       emoji: '🎵',  category: 'general'    },
+  { id: 'leaf',     label: 'Hoja',         emoji: '🍃',  category: 'general'    },
+  { id: 'flower',   label: 'Flor',         emoji: '🌸',  category: 'general'    },
+  { id: 'paw',      label: 'Huella',       emoji: '🐾',  category: 'mascotas'   },
+  { id: 'coffee',   label: 'Café',         emoji: '☕',  category: 'alimentos'  },
+  { id: 'pizza',    label: 'Pizza',        emoji: '🍕',  category: 'alimentos'  },
+  { id: 'beer',     label: 'Cerveza',      emoji: '🍺',  category: 'alimentos'  },
+  { id: 'burger',   label: 'Hamburguesa',  emoji: '🍔',  category: 'alimentos'  },
+  { id: 'icecream', label: 'Helado',       emoji: '🍦',  category: 'alimentos'  },
+  { id: 'custom',   label: 'Personalizado', emoji: '🎨', category: 'custom'     },
+] as const
+
+const stampIconIds = STAMP_ICONS.map(i => i.id) as [StampIcon, ...StampIcon[]]
+
 const rulesSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('stamps'), totalStamps: z.number().int().min(1), reward: z.string(), stampIcon: z.enum(['check', 'star', 'heart', 'coffee', 'pizza', 'beer', 'bolt', 'fire', 'crown', 'paw']).optional(), expiresInDays: z.number().int().positive().nullable() }),
+  z.object({
+    type: z.literal('stamps'),
+    totalStamps: z.number().int().min(1),
+    reward: z.string(),
+    stampIcon: z.enum(stampIconIds).optional(),
+    stampCustomSvg: z.string().optional(),
+    expiresInDays: z.number().int().positive().nullable(),
+  }),
   z.object({ type: z.literal('membership'), level: z.string(), expiresInDays: z.number().int().positive().nullable() }),
   z.object({ type: z.literal('points'), pointsLabel: z.string(), reward: z.string(), rewardThreshold: z.number().int().min(1), expiresInDays: z.number().int().positive().nullable() }),
   z.object({ type: z.literal('cashback'), cashbackPercent: z.number().positive().max(100), currency: z.string().min(1), expiresInDays: z.number().int().positive().nullable() }),
