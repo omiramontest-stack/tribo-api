@@ -26,6 +26,7 @@ export class CreateWalletUseCase implements UseCase<CreateWalletDto, Wallet> {
       accentColor: dto.accentColor,
       description: dto.description,
       rules: dto.rules,
+      businessRules: dto.businessRules ?? null,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     }

@@ -54,6 +54,11 @@ function buildLoyaltyClass(wallet: Wallet) {
   else if (rules.type === 'giftcard') rewardsTier = `Gift Card ${(rules as GiftCardRules).currency}`
   else if (rules.type === 'coupon') rewardsTier = `${(rules as CouponRules).discount}${(rules as CouponRules).discountType === 'percent' ? '%' : ` ${(rules as CouponRules).currency ?? ''}`} descuento`
 
+  const textModulesData: { header: string; body: string; id: string }[] = []
+  if (wallet.businessRules?.trim()) {
+    textModulesData.push({ header: 'Términos y condiciones', body: wallet.businessRules, id: 'business_rules' })
+  }
+
   return {
     id: classId,
     issuerName: wallet.businessName,
@@ -69,6 +74,7 @@ function buildLoyaltyClass(wallet: Wallet) {
     linksModuleData: {
       uris: [{ uri: `${API_URL}/w/`, description: 'Ver mi tarjeta', id: 'wallet_link' }],
     },
+    ...(textModulesData.length > 0 ? { textModulesData } : {}),
   }
 }
 

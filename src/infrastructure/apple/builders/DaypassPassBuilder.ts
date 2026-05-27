@@ -3,7 +3,7 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { DaypassRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { buildDaypassStripSet } from '../assets/DaypassStripGenerator.js'
-import { fullName, formatLongDate } from '../utils/passFieldUtils.js'
+import { fullName, formatLongDate, businessRulesBackField } from '../utils/passFieldUtils.js'
 
 export class DaypassPassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass): object {
@@ -26,6 +26,7 @@ export class DaypassPassBuilder implements PassBuilder {
         backFields: [
           { key: 'info', label: 'Acceso', value: 'Pase de un solo uso. Presenta este código QR en la entrada.' },
           { key: 'venue_detail', label: 'Sede', value: rules.venue },
+          ...businessRulesBackField(wallet.businessRules),
         ],
       },
     }

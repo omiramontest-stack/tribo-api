@@ -5,5 +5,6 @@ export interface WalletRepository {
   countByOrganizationId(organizationId: string): Promise<number>
   findById(id: string): Promise<Wallet | null>
   save(wallet: Wallet): Promise<Wallet>
+  update(wallet: Wallet): Promise<Wallet>
   delete(id: string): Promise<void>
 }

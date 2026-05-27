@@ -12,6 +12,8 @@ export interface Wallet {
   accentColor: string
   description: string
   rules: WalletRules
+  /** Términos, condiciones y reglas del negocio — se muestran en el reverso del pase. */
+  businessRules: string | null
   createdAt: string
   deletedAt: string | null
 }

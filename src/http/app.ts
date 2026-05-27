@@ -39,6 +39,7 @@ import { CreateWalletUseCase } from '../application/wallet/useCases/CreateWallet
 import { GetWalletsUseCase } from '../application/wallet/useCases/GetWalletsUseCase.js'
 import { GetWalletByIdUseCase } from '../application/wallet/useCases/GetWalletByIdUseCase.js'
 import { DeleteWalletUseCase } from '../application/wallet/useCases/DeleteWalletUseCase.js'
+import { UpdateWalletUseCase } from '../application/wallet/useCases/UpdateWalletUseCase.js'
 
 // Use cases — pass
 import { GeneratePassUseCase } from '../application/pass/useCases/GeneratePassUseCase.js'
@@ -164,6 +165,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getWallets = new GetWalletsUseCase(walletRepo, orgRepo)
   const getWalletById = new GetWalletByIdUseCase(walletRepo, orgRepo)
   const deleteWallet = new DeleteWalletUseCase(walletRepo, passRepo, orgRepo)
+  const updateWallet = new UpdateWalletUseCase(walletRepo, passRepo, orgRepo)
 
   // Pass use cases
   const generatePass = new GeneratePassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
@@ -218,7 +220,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   // Routes
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
-  app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, walletRepo, planGuard))
+  app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
   app.register(appleRoutes(prisma, passRepo, walletRepo, validateDownloadToken, redeemDownloadToken))

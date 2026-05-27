@@ -4,7 +4,7 @@ import type { BundleData } from '../../../domain/pass/entities/PassData.js'
 import type { BundleRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
-import { fullName, formatDate } from '../utils/passFieldUtils.js'
+import { fullName, formatDate, businessRulesBackField } from '../utils/passFieldUtils.js'
 
 export class BundlePassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass): object {
@@ -32,6 +32,7 @@ export class BundlePassBuilder implements PassBuilder {
           { key: 'total',          label: 'Total original', value: `${rules.totalUses} ${rules.label}` },
           { key: 'used_detail',    label: 'Ya utilizados',  value: String(used) },
           { key: 'expires_detail', label: 'Vencimiento',    value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
+          ...businessRulesBackField(wallet.businessRules),
         ],
       },
     }

@@ -11,4 +11,5 @@ export interface CreateWalletDto {
   accentColor: string
   description: string
   rules: WalletRules
+  businessRules?: string | null
 }

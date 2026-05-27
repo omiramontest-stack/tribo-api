@@ -115,6 +115,7 @@ model Wallet {
   accentColor    String
   description    String
   rules          Json
+  businessRules  String?
   createdAt      DateTime   @default(now())
   deletedAt      DateTime?
   createdBy      String?

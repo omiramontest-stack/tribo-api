@@ -98,6 +98,27 @@ export class PassPrismaRepository implements PassRepository {
     return map
   }
 
+  async findAllByWalletId(walletId: string): Promise<Pass[]> {
+    const rows = await this._db.pass.findMany({ where: { walletId, deletedAt: null } })
+    return rows.map(r => this._toEntity(r))
+  }
+
+  async findAllPushTokensByWalletId(walletId: string): Promise<string[]> {
+    // Obtiene todos los Apple push tokens de todos los passes activos de la wallet en una sola query.
+    const passes = await this._db.pass.findMany({
+      where: { walletId, deletedAt: null },
+      select: { token: true },
+    })
+    const passTokens = passes.map(p => p.token)
+    if (!passTokens.length) return []
+
+    const rows = await this._db.deviceRegistration.findMany({
+      where: { passToken: { in: passTokens } },
+      select: { pushToken: true },
+    })
+    return rows.map(r => r.pushToken)
+  }
+
   private _toEntity(row: PrismaPass): Pass {
     return {
       id: row.id,

@@ -11,6 +11,12 @@ export function txBackFields(txs: RecentTransaction[]): PassField[] {
   return txs.map((tx, i) => ({ key: `tx_${i}`, label: tx.label, value: tx.value }))
 }
 
+/** Devuelve un backField con las reglas del negocio, o array vacío si no hay. */
+export function businessRulesBackField(businessRules: string | null | undefined): PassField[] {
+  if (!businessRules?.trim()) return []
+  return [{ key: 'business_rules', label: 'Términos y condiciones', value: businessRules }]
+}
+
 export function formatCurrency(amount: number, currency: string): string {
   return `${currency} ${amount.toFixed(2)}`
 }

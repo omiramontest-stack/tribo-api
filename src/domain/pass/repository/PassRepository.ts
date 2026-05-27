@@ -16,4 +16,8 @@ export interface PassRepository {
   findPushTokensByPassToken(passToken: string): Promise<string[]>
   /** Batch: devuelve un mapa passToken → pushToken para un conjunto de passes. */
   findPushTokensByPassTokens(passTokens: string[]): Promise<Map<string, string>>
+  /** Devuelve todos los passes activos de una wallet (sin paginación, para operaciones masivas). */
+  findAllByWalletId(walletId: string): Promise<Pass[]>
+  /** Devuelve todos los Apple push tokens registrados para cualquier pass de una wallet. */
+  findAllPushTokensByWalletId(walletId: string): Promise<string[]>
 }

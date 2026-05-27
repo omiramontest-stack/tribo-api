@@ -59,7 +59,7 @@ export class ScheduleCampaignUseCase {
       rules: { type: 'stamps', totalStamps: 0, reward: '', expiresInDays: null },
       type: 'stamps' as const,
       id: '', organizationId: '', primaryColor: '', accentColor: '',
-      description: '', logoUrl: null, createdAt: '', deletedAt: null,
+      description: '', logoUrl: null, businessRules: null, createdAt: '', deletedAt: null,
     }
 
     // ── Cargar push tokens en batch (1 sola query IN, no 1 por pass) ────────────

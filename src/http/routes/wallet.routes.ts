@@ -4,6 +4,7 @@ import type { CreateWalletUseCase } from '../../application/wallet/useCases/Crea
 import type { GetWalletsUseCase } from '../../application/wallet/useCases/GetWalletsUseCase.js'
 import type { GetWalletByIdUseCase } from '../../application/wallet/useCases/GetWalletByIdUseCase.js'
 import type { DeleteWalletUseCase } from '../../application/wallet/useCases/DeleteWalletUseCase.js'
+import type { UpdateWalletUseCase } from '../../application/wallet/useCases/UpdateWalletUseCase.js'
 import type { WalletRepository } from '../../domain/wallet/repository/WalletRepository.js'
 import type { StampIcon } from '../../domain/wallet/entities/WalletRules.js'
 import { authenticate, requireOrgContext } from '../middlewares/authenticate.js'
@@ -59,13 +60,26 @@ const createSchema = z.object({
   accentColor: z.string(),
   description: z.string(),
   rules: rulesSchema,
+  businessRules: z.string().nullable().optional(),
 })
+
+// Schema para edición parcial de wallet — todos los campos son opcionales
+const updateSchema = z.object({
+  businessName: z.string().min(1).optional(),
+  logoUrl: z.string().url().or(z.literal('')).nullable().optional(),
+  primaryColor: z.string().optional(),
+  accentColor: z.string().optional(),
+  description: z.string().optional(),
+  rules: rulesSchema.optional(),
+  businessRules: z.string().nullable().optional(),
+}).refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' })
 
 export function walletRoutes(
   createWallet: CreateWalletUseCase,
   getWallets: GetWalletsUseCase,
   getWalletById: GetWalletByIdUseCase,
   deleteWallet: DeleteWalletUseCase,
+  updateWallet: UpdateWalletUseCase,
   walletRepo: WalletRepository,
   planGuard: PlanGuard,
 ) {
@@ -103,6 +117,23 @@ export function walletRoutes(
 
       reply.code(201).send(
         await createWallet.run({ ...body.data, organizationId: request.admin.organizationId!, adminId: request.admin.adminId }),
+      )
+    })
+
+    app.put('/organizations/:orgId/wallets/:id', async (request, reply) => {
+      const { orgId, id } = request.params as { orgId: string; id: string }
+      if (orgId !== request.admin.organizationId) return reply.code(403).send({ error: 'Forbidden' })
+
+      const body = updateSchema.safeParse(request.body)
+      if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
+
+      reply.send(
+        await updateWallet.run({
+          id,
+          organizationId: request.admin.organizationId!,
+          adminId: request.admin.adminId,
+          ...body.data,
+        }),
       )
     })
 

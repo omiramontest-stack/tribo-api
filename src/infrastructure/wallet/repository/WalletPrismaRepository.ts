@@ -32,6 +32,23 @@ export class WalletPrismaRepository implements WalletRepository {
         accentColor: wallet.accentColor,
         description: wallet.description,
         rules: wallet.rules as object,
+        businessRules: wallet.businessRules,
+      },
+    })
+    return this._toEntity(row)
+  }
+
+  async update(wallet: Wallet): Promise<Wallet> {
+    const row = await this._db.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        businessName: wallet.businessName,
+        logoUrl: wallet.logoUrl,
+        primaryColor: wallet.primaryColor,
+        accentColor: wallet.accentColor,
+        description: wallet.description,
+        rules: wallet.rules as object,
+        businessRules: wallet.businessRules,
       },
     })
     return this._toEntity(row)
@@ -52,6 +69,7 @@ export class WalletPrismaRepository implements WalletRepository {
       accentColor: row.accentColor,
       description: row.description,
       rules: row.rules as unknown as WalletRules,
+      businessRules: row.businessRules ?? null,
       createdAt: row.createdAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,
     }
