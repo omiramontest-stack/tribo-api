@@ -20,11 +20,11 @@ export const PassDesignConfig = {
   },
   stamps: {
     /** Radio de cada círculo de sello en px @2x. */
-    circleRadius: 60,
+    circleRadius: 46,
     /** Espacio entre círculos en px @2x. */
-    circleGap: 14,
+    circleGap: 18,
     /** Padding superior dentro del strip en px @2x. */
-    paddingTop: 40,
+    paddingTop: 48,
     /** Alto máximo del strip @2x para storeCard (Apple Wallet). */
     maxStripHeight: 576,
   },

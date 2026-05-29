@@ -8,14 +8,14 @@ import type { StampIcon } from '../../../domain/wallet/entities/WalletRules.js'
 import type { StampsData } from '../../../domain/pass/entities/PassData.js'
 import type { StampsRules } from '../../../domain/wallet/entities/WalletRules.js'
 
-const STRIP_W   = PassDesignConfig.strip.width
-const CIRCLE_R  = PassDesignConfig.stamps.circleRadius
+const STRIP_W    = PassDesignConfig.strip.width
+const CIRCLE_R   = PassDesignConfig.stamps.circleRadius
 const CIRCLE_GAP = PassDesignConfig.stamps.circleGap
-const PAD_TOP   = PassDesignConfig.stamps.paddingTop
-const MAX_H     = PassDesignConfig.stamps.maxStripHeight
-const TEXT_PAD  = 14
-const TEXT_SIZE = 28
-const PAD_BOTTOM = 24
+const PAD_TOP    = PassDesignConfig.stamps.paddingTop
+const MAX_H      = PassDesignConfig.stamps.maxStripHeight
+const TEXT_PAD   = 20
+const TEXT_SIZE  = 28
+const PAD_BOTTOM = 36
 
 // Google Wallet heroImage dimensions (1032×~336 for 2-row grids)
 const HERO_W       = 1032
@@ -92,11 +92,9 @@ function computeGrid(total: number): { cols: number; rows: number } {
 function computeLayout(total: number): { cols: number; rows: number; radius: number; step: number } {
   const { cols, rows } = computeGrid(total)
   const gap = CIRCLE_GAP
-  // Height budget reserved for text and padding
-  const available = MAX_H - PAD_TOP - TEXT_PAD - TEXT_SIZE - PAD_BOTTOM
-  // Largest radius that keeps rows * (2R + gap) - gap ≤ available
-  const maxRadius = Math.floor((available - gap * (rows - 1)) / (2 * rows))
-  const radius = Math.min(CIRCLE_R, maxRadius)
+  const availableH = MAX_H - PAD_TOP - TEXT_PAD - TEXT_SIZE - PAD_BOTTOM
+  const maxByHeight = Math.floor((availableH - gap * (rows - 1)) / (2 * rows))
+  const radius = Math.min(CIRCLE_R, maxByHeight)
   const step = radius * 2 + gap
   return { cols, rows, radius, step }
 }
@@ -252,13 +250,17 @@ function renderPaw(cx: number, cy: number, r: number, color: string): string {
   ].join('')
 }
 
-/** 🍔 Hamburger (3 layered buns + patty) */
+/** 🍔 Hamburger — dome top bun so it reads as a burger, not a menu icon */
 function renderBurger(cx: number, cy: number, r: number, color: string): string {
   const s = r / 44
+  // Top bun: half-ellipse arc (dome), base at cy-5s, apex at cy-14s
+  const topBun = `M${cx - 13 * s},${cy - 5 * s} A${13 * s},${9 * s} 0 0 1 ${cx + 13 * s},${cy - 5 * s} Z`
   return [
-    `<rect x="${cx - 13 * s}" y="${cy - 15 * s}" width="${26 * s}" height="${9 * s}" rx="${5 * s}" fill="${color}"/>`,
-    `<rect x="${cx - 15 * s}" y="${cy - 3 * s}" width="${30 * s}" height="${6 * s}" rx="${2 * s}" fill="${color}"/>`,
-    `<rect x="${cx - 12 * s}" y="${cy + 6 * s}" width="${24 * s}" height="${9 * s}" rx="${4 * s}" fill="${color}"/>`,
+    `<path d="${topBun}" fill="${color}"/>`,
+    // Patty — wider than buns to show it sticking out
+    `<rect x="${cx - 16 * s}" y="${cy - 3 * s}" width="${32 * s}" height="${5 * s}" rx="${1.5 * s}" fill="${color}"/>`,
+    // Bottom bun — smaller, clearly rounded
+    `<rect x="${cx - 12 * s}" y="${cy + 4 * s}" width="${24 * s}" height="${8 * s}" rx="${4 * s}" fill="${color}"/>`,
   ].join('')
 }
 
