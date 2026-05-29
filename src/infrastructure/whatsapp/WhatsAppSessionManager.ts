@@ -14,12 +14,16 @@ function maskPhone(phone: string): string {
   return `***${digits.slice(-4)}`
 }
 
-export type WhatsAppStatus = 'disconnected' | 'qr_pending' | 'connected'
+export type WhatsAppStatus = 'disconnected' | 'qr_pending' | 'connected' | 'failed'
 
 type SSESubscriber = (event: string, data: object) => void
 
 const SEND_COOLDOWN_MS = 5_000
 const QR_SESSION_TIMEOUT_MS = 5 * 60 * 1000
+
+// Stop reconnecting after this many consecutive failures to prevent
+// infinite key generation and memory accumulation.
+const MAX_RECONNECT_ATTEMPTS = 8
 
 // Exponential backoff: 5s → 10s → 20s → 40s → 60s (max), ±25% jitter
 const RECONNECT_BASE_MS = 5_000
@@ -28,6 +32,22 @@ function reconnectDelay(attempt: number): number {
   const exp = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS)
   const jitter = exp * 0.25 * (Math.random() * 2 - 1)
   return Math.round(exp + jitter)
+}
+
+// Cache the WhatsApp Web version — it only changes when WhatsApp releases
+// an update. Re-fetching on every reconnect hits GitHub and wastes time.
+let _cachedVersion: [number, number, number] | null = null
+let _versionFetchedAt = 0
+const VERSION_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+async function getWaVersion(): Promise<[number, number, number]> {
+  if (_cachedVersion && Date.now() - _versionFetchedAt < VERSION_TTL_MS) {
+    return _cachedVersion
+  }
+  const { version } = await fetchLatestBaileysVersion()
+  _cachedVersion = version as [number, number, number]
+  _versionFetchedAt = Date.now()
+  return _cachedVersion
 }
 
 interface SessionEntry {
@@ -65,9 +85,15 @@ export class WhatsAppSessionManager {
 
   async restoreAll(): Promise<void> {
     const rows = await this._db.whatsAppSession.findMany()
-    for (const row of rows) {
-      await this._connect(row.organizationId).catch(err =>
-        logger.error({ err, orgId: row.organizationId }, '[WhatsApp] restore failed'),
+    // Restore concurrently but cap parallelism to avoid bursting connections.
+    const CONCURRENCY = 3
+    for (let i = 0; i < rows.length; i += CONCURRENCY) {
+      await Promise.allSettled(
+        rows.slice(i, i + CONCURRENCY).map(row =>
+          this._connect(row.organizationId).catch(err =>
+            logger.error({ err, orgId: row.organizationId }, '[WhatsApp] restore failed'),
+          ),
+        ),
       )
     }
   }
@@ -91,7 +117,9 @@ export class WhatsAppSessionManager {
 
   async connect(orgId: string): Promise<void> {
     const existing = this._sessions.get(orgId)
-    if (existing && existing.status !== 'disconnected') return
+    if (existing && existing.status !== 'disconnected' && existing.status !== 'failed') return
+    // Reset reconnect counter on manual connect so the user can always retry.
+    if (existing) existing.reconnectAttempt = 0
     await this._connect(orgId)
   }
 
@@ -133,7 +161,7 @@ export class WhatsAppSessionManager {
 
   private async _connect(orgId: string): Promise<void> {
     const { state, saveCreds, flushAll } = await useDbAuthState(orgId, this._db)
-    const { version } = await fetchLatestBaileysVersion()
+    const version = await getWaVersion()
 
     const sock = makeWASocket({
       version,
@@ -146,6 +174,10 @@ export class WhatsAppSessionManager {
       markOnlineOnConnect: false,
       maxMsgRetryCount: 0,
       getMessage: async () => undefined,
+      // Don't cache group metadata — reduces memory footprint significantly
+      cachedGroupMetadata: async () => undefined,
+      // Reduce retry overhead for a send-only use case
+      transactionOpts: { maxCommitRetries: 1, delayBetweenTriesMs: 500 },
     })
 
     const entry: SessionEntry = {
@@ -160,14 +192,10 @@ export class WhatsAppSessionManager {
     }
     this._sessions.set(orgId, entry)
 
-    // saveCreds es async — si falla dentro del EventEmitter se convierte en
-    // unhandledRejection. Lo envolvemos para que el error quede en los logs
-    // sin crashear el proceso.
     sock.ev.on('creds.update', () => {
       saveCreds().catch(err => logger.error({ err, orgId }, '[WhatsApp] saveCreds failed'))
     })
 
-    // connection.update también es async (escribe en DB). Mismo problema.
     sock.ev.on('connection.update', (update) => {
       this._handleConnectionUpdate(orgId, entry, sock, update).catch(err =>
         logger.error({ err, orgId }, '[WhatsApp] connection.update handler failed'),
@@ -230,19 +258,43 @@ export class WhatsAppSessionManager {
           this._db.whatsAppAuthCreds.deleteMany({ where: { organizationId: orgId } }),
           this._db.whatsAppAuthKey.deleteMany({ where: { organizationId: orgId } }),
         ]).catch(() => {})
-      } else {
-        entry.status = 'disconnected'
-        const delay = reconnectDelay(entry.reconnectAttempt++)
-        this._emit(orgId, 'reconnecting', { delayMs: delay })
-        logger.info({ orgId, attempt: entry.reconnectAttempt, delayMs: delay }, '[WhatsApp] scheduling reconnect')
-        setTimeout(() => {
-          if (this._sessions.get(orgId)?.status === 'disconnected') {
-            this._connect(orgId).catch(err =>
-              logger.error({ err, orgId }, '[WhatsApp] reconnect failed'),
-            )
-          }
-        }, delay)
+        return
       }
+
+      // Permanent errors: don't reconnect, let the user re-initiate manually.
+      const permanentErrors = new Set([
+        DisconnectReason.forbidden,
+        DisconnectReason.badSession,
+      ])
+      if (statusCode && permanentErrors.has(statusCode)) {
+        entry.status = 'failed'
+        this._emit(orgId, 'failed', { reason: 'permanent_error', statusCode })
+        logger.warn({ orgId, statusCode }, '[WhatsApp] permanent disconnect — not reconnecting')
+        await this._destroyEntry(orgId)
+        return
+      }
+
+      // Give up after MAX_RECONNECT_ATTEMPTS to prevent infinite key generation.
+      if (entry.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+        entry.status = 'failed'
+        this._emit(orgId, 'failed', { reason: 'max_reconnects_reached' })
+        logger.warn({ orgId, attempts: entry.reconnectAttempt }, '[WhatsApp] max reconnects reached — giving up')
+        await this._destroyEntry(orgId)
+        return
+      }
+
+      entry.status = 'disconnected'
+      const delay = reconnectDelay(entry.reconnectAttempt++)
+      this._emit(orgId, 'reconnecting', { delayMs: delay, attempt: entry.reconnectAttempt })
+      logger.info({ orgId, attempt: entry.reconnectAttempt, delayMs: delay }, '[WhatsApp] scheduling reconnect')
+
+      setTimeout(() => {
+        if (this._sessions.get(orgId)?.status === 'disconnected') {
+          this._connect(orgId).catch(err =>
+            logger.error({ err, orgId }, '[WhatsApp] reconnect failed'),
+          )
+        }
+      }, delay)
     }
   }
 

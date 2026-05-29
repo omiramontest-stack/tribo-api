@@ -2,12 +2,16 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 
 const ALGORITHM = 'aes-256-gcm'
 
+let _key: Buffer | null = null
+
 function getKey(): Buffer {
+  if (_key) return _key
   const hex = process.env.WHATSAPP_ENCRYPTION_KEY
   if (!hex || hex.length !== 64) {
     throw new Error('WHATSAPP_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)')
   }
-  return Buffer.from(hex, 'hex')
+  _key = Buffer.from(hex, 'hex')
+  return _key
 }
 
 export function encrypt(plaintext: string): string {
