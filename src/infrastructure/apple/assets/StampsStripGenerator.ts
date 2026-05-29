@@ -8,14 +8,20 @@ import type { StampIcon } from '../../../domain/wallet/entities/WalletRules.js'
 import type { StampsData } from '../../../domain/pass/entities/PassData.js'
 import type { StampsRules } from '../../../domain/wallet/entities/WalletRules.js'
 
-const STRIP_W = PassDesignConfig.strip.width
-const CIRCLE_R = PassDesignConfig.stamps.circleRadius
+const STRIP_W   = PassDesignConfig.strip.width
+const CIRCLE_R  = PassDesignConfig.stamps.circleRadius
 const CIRCLE_GAP = PassDesignConfig.stamps.circleGap
-const CIRCLE_STEP = CIRCLE_R * 2 + CIRCLE_GAP
-const PAD_TOP = PassDesignConfig.stamps.paddingTop
-const TEXT_PAD = 20   // gap between last circle row and progress text
-const TEXT_SIZE = 28  // font-size px for the progress caption
-const PAD_BOTTOM = 36 // padding below the text
+const PAD_TOP   = PassDesignConfig.stamps.paddingTop
+const MAX_H     = PassDesignConfig.stamps.maxStripHeight
+const TEXT_PAD  = 14
+const TEXT_SIZE = 28
+const PAD_BOTTOM = 24
+
+// Google Wallet heroImage dimensions (1032×~336 for 2-row grids)
+const HERO_W       = 1032
+const HERO_BASE_R  = 72
+const HERO_GAP     = 16
+const HERO_PAD     = 16
 
 const BG_W = 540
 const BG_H = 660
@@ -77,6 +83,22 @@ function computeGrid(total: number): { cols: number; rows: number } {
   if (total <= 5) return { cols: total, rows: 1 }
   if (total <= 10) return { cols: Math.ceil(total / 2), rows: 2 }
   return { cols: 5, rows: Math.ceil(total / 5) }
+}
+
+/**
+ * Computes circle radius and step for the Apple Wallet strip, scaling down
+ * automatically when many stamp rows would otherwise exceed MAX_H.
+ */
+function computeLayout(total: number): { cols: number; rows: number; radius: number; step: number } {
+  const { cols, rows } = computeGrid(total)
+  const gap = CIRCLE_GAP
+  // Height budget reserved for text and padding
+  const available = MAX_H - PAD_TOP - TEXT_PAD - TEXT_SIZE - PAD_BOTTOM
+  // Largest radius that keeps rows * (2R + gap) - gap ≤ available
+  const maxRadius = Math.floor((available - gap * (rows - 1)) / (2 * rows))
+  const radius = Math.min(CIRCLE_R, maxRadius)
+  const step = radius * 2 + gap
+  return { cols, rows, radius, step }
 }
 
 // ── Icon renderers ──────────────────────────────────────────────────────────
@@ -167,13 +189,16 @@ function renderCrown(cx: number, cy: number, r: number, color: string): string {
   return `<path d="${path}" fill="${color}"/>`
 }
 
-/** ☕ Coffee cup */
+/**
+ * ☕ Coffee cup — cup body centered at (cx, cy); steam above is thin and
+ * carries less visual weight, keeping the icon balanced inside the circle.
+ */
 function renderCoffee(cx: number, cy: number, r: number, color: string): string {
   const s = r / 44
-  const by = cy - 4 * s
+  const bh = 22 * s          // cup body height
+  const by = cy - bh / 2     // top of cup body, centers body at cy
   const bx = cx - 13 * s
   const bw = 26 * s
-  const bh = 22 * s
   const hx = bx + bw
   const hy = by + 5 * s
   const steam1 = `M${cx - 6 * s},${by - 4 * s} Q${cx - 3 * s},${by - 9 * s} ${cx - 6 * s},${by - 14 * s}`
@@ -231,11 +256,8 @@ function renderPaw(cx: number, cy: number, r: number, color: string): string {
 function renderBurger(cx: number, cy: number, r: number, color: string): string {
   const s = r / 44
   return [
-    // Top bun (rounded, tallish)
     `<rect x="${cx - 13 * s}" y="${cy - 15 * s}" width="${26 * s}" height="${9 * s}" rx="${5 * s}" fill="${color}"/>`,
-    // Patty / filling (slightly wider, flat)
     `<rect x="${cx - 15 * s}" y="${cy - 3 * s}" width="${30 * s}" height="${6 * s}" rx="${2 * s}" fill="${color}"/>`,
-    // Bottom bun
     `<rect x="${cx - 12 * s}" y="${cy + 6 * s}" width="${24 * s}" height="${9 * s}" rx="${4 * s}" fill="${color}"/>`,
   ].join('')
 }
@@ -245,15 +267,14 @@ function renderGem(cx: number, cy: number, r: number, color: string): string {
   const s = r * 0.44
   const f = (x: number, y: number) =>
     `${(cx + x * s).toFixed(1)},${(cy + y * s).toFixed(1)}`
-  // 7-point classic cut gem: flat table top → wide girdle → culet point
   const d =
-    `M${f(-0.30, -1)}` +    // table left
-    ` L${f(0.30, -1)}` +    // table right
-    ` L${f(1, -0.28)}` +    // upper-right shoulder
-    ` L${f(0.62, 0.12)}` +  // right girdle
-    ` L${f(0, 1)}` +         // culet (bottom point)
-    ` L${f(-0.62, 0.12)}` + // left girdle
-    ` L${f(-1, -0.28)} Z`   // upper-left shoulder
+    `M${f(-0.30, -1)}` +
+    ` L${f(0.30, -1)}` +
+    ` L${f(1, -0.28)}` +
+    ` L${f(0.62, 0.12)}` +
+    ` L${f(0, 1)}` +
+    ` L${f(-0.62, 0.12)}` +
+    ` L${f(-1, -0.28)} Z`
   return `<path d="${d}" fill="${color}"/>`
 }
 
@@ -263,15 +284,11 @@ function renderGift(cx: number, cy: number, r: number, color: string): string {
   const lidTop = cy - 11 * s
   const lidBot = cy - 1 * s
   const bh = 18 * s
-  const sw = 3.5 * s // stroke width for bow arcs
+  const sw = 3.5 * s
   return [
-    // Box body
     `<rect x="${cx - 12 * s}" y="${lidBot}" width="${24 * s}" height="${bh}" rx="${2 * s}" fill="${color}"/>`,
-    // Lid (slightly wider)
     `<rect x="${cx - 14 * s}" y="${lidTop}" width="${28 * s}" height="${10 * s}" rx="${2 * s}" fill="${color}"/>`,
-    // Bow — left loop
     `<path d="M${cx},${lidTop} Q${cx - 12 * s},${lidTop - 7 * s} ${cx - 5 * s},${lidTop - 1 * s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`,
-    // Bow — right loop
     `<path d="M${cx},${lidTop} Q${cx + 12 * s},${lidTop - 7 * s} ${cx + 5 * s},${lidTop - 1 * s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`,
   ].join('')
 }
@@ -279,17 +296,14 @@ function renderGift(cx: number, cy: number, r: number, color: string): string {
 /** 🎵 Music note (filled head + stem + flag) */
 function renderMusic(cx: number, cy: number, r: number, color: string): string {
   const s = r / 44
-  const nhCx = cx - 4 * s        // note-head center x
-  const nhCy = cy + 13 * s        // note-head center y
-  const stemTop = cy - 17 * s     // top of stem
-  const stemRight = nhCx + 8 * s  // right edge of stem
+  const nhCx = cx - 4 * s
+  const nhCy = cy + 13 * s
+  const stemTop = cy - 17 * s
+  const stemRight = nhCx + 8 * s
   const sw = 3 * s
   return [
-    // Note head (slightly tilted ellipse)
     `<ellipse cx="${nhCx}" cy="${nhCy}" rx="${9 * s}" ry="${6.5 * s}" transform="rotate(-15 ${nhCx} ${nhCy})" fill="${color}"/>`,
-    // Stem (vertical bar from head right edge up)
     `<rect x="${stemRight}" y="${stemTop}" width="${sw}" height="${nhCy - stemTop}" fill="${color}"/>`,
-    // Flag (curved line from stem top)
     `<path d="M${stemRight + sw},${stemTop} Q${stemRight + sw + 14 * s},${stemTop + 8 * s} ${stemRight + sw + 8 * s},${stemTop + 18 * s}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`,
   ].join('')
 }
@@ -299,12 +313,10 @@ function renderLeaf(cx: number, cy: number, r: number, color: string): string {
   const s = r * 0.46
   const topY = cy - s * 0.95
   const botY = cy + s * 0.95
-  // Pointed-oval leaf shape using symmetric cubic beziers
   const path =
     `M${cx.toFixed(1)},${topY.toFixed(1)}` +
     ` C${(cx + s).toFixed(1)},${(cy - s * 0.2).toFixed(1)} ${(cx + s).toFixed(1)},${(cy + s * 0.2).toFixed(1)} ${cx.toFixed(1)},${botY.toFixed(1)}` +
     ` C${(cx - s).toFixed(1)},${(cy + s * 0.2).toFixed(1)} ${(cx - s).toFixed(1)},${(cy - s * 0.2).toFixed(1)} ${cx.toFixed(1)},${topY.toFixed(1)} Z`
-  // Center vein
   const vein =
     `M${cx.toFixed(1)},${(topY + s * 0.1).toFixed(1)} L${cx.toFixed(1)},${(botY - s * 0.1).toFixed(1)}`
   return [
@@ -316,18 +328,15 @@ function renderLeaf(cx: number, cy: number, r: number, color: string): string {
 /** 🍦 Ice cream cone */
 function renderIcecream(cx: number, cy: number, r: number, color: string): string {
   const s = r / 44
-  const scoopCy = cy - 10 * s   // center of scoop circle
-  const scoopR = 13 * s          // scoop radius
-  const coneTopY = cy + 2 * s    // where scoop meets cone
-  const coneTipY = cy + 22 * s   // tip of cone
-  const coneHW = 14 * s          // half-width of cone at top
+  const scoopCy = cy - 10 * s
+  const scoopR = 13 * s
+  const coneTopY = cy + 2 * s
+  const coneTipY = cy + 22 * s
+  const coneHW = 14 * s
   return [
-    // Cone triangle (pointing down)
     `<path d="M${cx - coneHW},${coneTopY} L${cx + coneHW},${coneTopY} L${cx},${coneTipY} Z" fill="${color}"/>`,
-    // Waffle grid hint on cone
     `<path d="M${cx - coneHW * 0.7},${coneTopY + 5 * s} L${cx + coneHW * 0.7},${coneTopY + 5 * s}" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="${1.5 * s}"/>`,
     `<path d="M${cx - coneHW * 0.4},${coneTopY + 12 * s} L${cx + coneHW * 0.4},${coneTopY + 12 * s}" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="${1.5 * s}"/>`,
-    // Scoop (circle)
     `<circle cx="${cx}" cy="${scoopCy}" r="${scoopR}" fill="${color}"/>`,
   ].join('')
 }
@@ -337,17 +346,11 @@ function renderIcecream(cx: number, cy: number, r: number, color: string): strin
  *
  * Acepta un SVG completo (etiqueta `<svg viewBox="...">…</svg>`) y lo incrusta
  * escalado y centrado dentro del círculo de sello.
- *
- * - Si el SVG tiene `viewBox`, se usa para escalar correctamente.
- * - Si no tiene `viewBox`, se asume `0 0 24 24` (estándar de íconos).
- * - Los colores del SVG original se preservan tal cual.
  */
 function renderCustom(svgContent: string, cx: number, cy: number, r: number): string {
-  // Extraer viewBox del SVG (si existe)
   const vbMatch = svgContent.match(/viewBox=["']([^"']+)["']/i)
   const viewBox = vbMatch ? vbMatch[1] : '0 0 24 24'
 
-  // Extraer el contenido interno (sin el tag <svg ...> externo)
   const inner = svgContent
     .replace(/<svg[^>]*>/gi, '')
     .replace(/<\/svg>/gi, '')
@@ -355,7 +358,6 @@ function renderCustom(svgContent: string, cx: number, cy: number, r: number): st
 
   if (!inner) return ''
 
-  // Padding del 12 % del radio para que el ícono no roce el borde del círculo
   const pad = r * 0.12
   const size = (r - pad) * 2
   const x = cx - r + pad
@@ -367,8 +369,8 @@ function renderCustom(svgContent: string, cx: number, cy: number, r: number): st
 /** 🌸 Flower (5 petal circles + center) */
 function renderFlower(cx: number, cy: number, r: number, color: string): string {
   const s = r * 0.44
-  const dist = s * 0.50     // petal center distance from origin
-  const petalR = s * 0.43   // petal circle radius
+  const dist = s * 0.50
+  const petalR = s * 0.43
   let petals = ''
   for (let i = 0; i < 5; i++) {
     const angle = (i / 5) * Math.PI * 2 - Math.PI / 2
@@ -376,18 +378,12 @@ function renderFlower(cx: number, cy: number, r: number, color: string): string 
     const py = cy + Math.sin(angle) * dist
     petals += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${petalR.toFixed(1)}" fill="${color}"/>`
   }
-  // Center circle (slightly smaller than petals to show petal overlap)
   petals += `<circle cx="${cx}" cy="${cy}" r="${(s * 0.30).toFixed(1)}" fill="${color}"/>`
   return petals
 }
 
 // ── Active icon dispatcher ──────────────────────────────────────────────────
 
-/**
- * Returns the SVG elements to render inside a stamp circle.
- * All built-in icons are pure SVG paths — no Unicode text — for reliable resvg rendering.
- * When `icon === 'custom'`, embeds the caller-provided `customSvg` string scaled to the circle.
- */
 function renderActiveIcon(
   icon: StampIcon,
   cx: number,
@@ -424,16 +420,18 @@ function renderActiveIcon(
 function buildCircles(
   current: number,
   total: number,
+  canvasW: number,
+  padTop: number,
   primaryColor: string,
   cols: number,
+  radius: number,
+  step: number,
+  gap: number,
   icon: StampIcon,
   customSvg?: string,
 ): string {
   const palette = stripPalette(primaryColor)
-
-  // Active icon color: brand color when it contrasts well on white; otherwise near-black.
   const activeIconColor = iconColorOnWhite(primaryColor)
-
   let circles = ''
 
   for (let i = 0; i < total; i++) {
@@ -441,20 +439,18 @@ function buildCircles(
     const row = Math.floor(i / cols)
     const rowCols = Math.min(cols, total - row * cols)
 
-    const rowW = rowCols * CIRCLE_STEP - CIRCLE_GAP
-    const offsetX = (STRIP_W - rowW) / 2 + CIRCLE_R
+    const rowW = rowCols * step - gap
+    const offsetX = (canvasW - rowW) / 2 + radius
 
-    const cx = offsetX + col * CIRCLE_STEP
-    const cy = PAD_TOP + CIRCLE_R + row * CIRCLE_STEP
+    const cx = offsetX + col * step
+    const cy = padTop + radius + row * step
 
     if (i < current) {
-      // ── Stamped: bright white circle + colored icon ──────────────────────
-      circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="rgba(255,255,255,0.97)"/>`
-      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, activeIconColor, customSvg)
+      circles += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(255,255,255,0.97)"/>`
+      circles += renderActiveIcon(icon, cx, cy, radius, activeIconColor, customSvg)
     } else {
-      // ── Pending: ghost circle with clearly visible border + faint icon ───
-      circles += `<circle cx="${cx}" cy="${cy}" r="${CIRCLE_R}" fill="${palette.container}" stroke="${palette.stampBorder}" stroke-width="2.5"/>`
-      circles += renderActiveIcon(icon, cx, cy, CIRCLE_R, palette.stampGhost, customSvg)
+      circles += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${palette.container}" stroke="${palette.stampBorder}" stroke-width="2.5"/>`
+      circles += renderActiveIcon(icon, cx, cy, radius, palette.stampGhost, customSvg)
     }
   }
 
@@ -472,11 +468,11 @@ export function buildStampsStrip(
   reward = '',
   customSvg?: string,
 ): Buffer {
-  const { cols, rows } = computeGrid(total)
-  const totalGridH = rows * CIRCLE_STEP - CIRCLE_GAP
+  const { cols, rows, radius, step } = computeLayout(total)
+  const totalGridH = rows * step - CIRCLE_GAP
   const H = PAD_TOP + totalGridH + TEXT_PAD + TEXT_SIZE + PAD_BOTTOM
 
-  const circles = buildCircles(current, total, primaryColor, cols, icon, customSvg)
+  const circles = buildCircles(current, total, STRIP_W, PAD_TOP, primaryColor, cols, radius, step, CIRCLE_GAP, icon, customSvg)
   const palette = stripPalette(primaryColor)
 
   const caption = reward ? `${current} / ${total} — ${reward}` : `${current} / ${total}`
@@ -502,6 +498,48 @@ export function buildStampsStrip(
       fill="${palette.textMuted}"
       letter-spacing="0.3"
     >${caption}</text>
+  </svg>`
+
+  return svgToPng(svg)
+}
+
+/**
+ * Renders a landscape banner image (1032px wide) optimised for Google Wallet
+ * heroImage. The stamp grid is horizontally centered with radius 72, which
+ * produces a 1032×336 image for the common 2-row cases (6-10 stamps).
+ */
+export function buildStampsHeroImage(
+  current: number,
+  total: number,
+  primaryColor: string,
+  accentColor: string,
+  icon: StampIcon = 'check',
+  customSvg?: string,
+): Buffer {
+  const { cols, rows } = computeGrid(total)
+  const step = HERO_BASE_R * 2 + HERO_GAP
+  const totalGridH = rows * step - HERO_GAP
+  const H = HERO_PAD + totalGridH + HERO_PAD
+
+  const circles = buildCircles(
+    current, total, HERO_W, HERO_PAD, primaryColor,
+    cols, HERO_BASE_R, step, HERO_GAP, icon, customSvg,
+  )
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${HERO_W}" height="${H}">
+    <defs>
+      <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${primaryColor}"/>
+        <stop offset="100%" stop-color="${accentColor}"/>
+      </linearGradient>
+      <radialGradient id="bloom" cx="85%" cy="15%" r="70%" gradientUnits="objectBoundingBox">
+        <stop offset="0%" stop-color="${accentColor}" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="${accentColor}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="${HERO_W}" height="${H}" fill="url(#grad)"/>
+    <rect width="${HERO_W}" height="${H}" fill="url(#bloom)"/>
+    ${circles}
   </svg>`
 
   return svgToPng(svg)

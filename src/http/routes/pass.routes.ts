@@ -13,6 +13,9 @@ import type { SendPassWhatsAppUseCase } from '../../application/pass/useCases/Se
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
+import { buildStampsHeroImage } from '../../infrastructure/apple/assets/StampsStripGenerator.js'
+import type { StampsRules } from '../../domain/wallet/entities/WalletRules.js'
+import type { StampsData } from '../../domain/pass/entities/PassData.js'
 import { sendWhatsAppRateLimit, daypassScanRateLimit, sendPassLinkRateLimit } from '../plugins/rateLimit.js'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { PlanGuard } from '../middlewares/checkPlan.js'
@@ -76,6 +79,30 @@ export function passRoutes(
       if (!isValidAdminRequest(request)) return reply.code(401).send({ error: 'UNAUTHORIZED' })
 
       reply.send(await getPassByToken.run(token))
+    })
+
+    // Public — stamp strip image for Google Wallet heroImage (no PII returned, only PNG)
+    app.get('/passes/:token/stamp-strip', async (request, reply) => {
+      const { token } = request.params as { token: string }
+      try {
+        const { pass, wallet } = await getPassByToken.run(token)
+        if (wallet.rules.type !== 'stamps') return reply.code(404).send()
+        const rules = wallet.rules as StampsRules
+        const data = pass.data as StampsData
+        const img = buildStampsHeroImage(
+          data.currentStamps,
+          rules.totalStamps,
+          wallet.primaryColor,
+          wallet.accentColor,
+          rules.stampIcon,
+          rules.stampCustomSvg,
+        )
+        reply.header('Content-Type', 'image/png')
+        reply.header('Cache-Control', 'no-cache, no-store')
+        reply.send(img)
+      } catch {
+        reply.code(404).send()
+      }
     })
 
     // Daypass scan — público por diseño (scanner en entrada del evento no tiene sesión).
