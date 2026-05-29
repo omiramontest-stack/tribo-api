@@ -21,7 +21,7 @@ const PAD_BOTTOM = 24
 const HERO_W       = 1032
 const HERO_BASE_R  = 72
 const HERO_GAP     = 16
-const HERO_PAD     = 16
+const HERO_PAD     = 40
 
 const BG_W = 540
 const BG_H = 660
