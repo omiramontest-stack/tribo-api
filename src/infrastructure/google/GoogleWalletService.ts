@@ -134,19 +134,16 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
     secondaryText = d.used ? 'Cupón usado' : fmtExpiry(d.expiresAt)
   }
 
-  const stampImageModule = wallet.rules.type === 'stamps'
-    ? [
-        {
-          mainImage: {
-            sourceUri: {
-              uri: `${API_URL}/passes/${pass.token}/stamp-strip?v=${(pass.data as StampsData).currentStamps}`,
-            },
-            contentDescription: { defaultValue: { language: 'es', value: 'Sellos acumulados' } },
+  const stampHeroImage = wallet.rules.type === 'stamps'
+    ? {
+        heroImage: {
+          sourceUri: {
+            uri: `${API_URL}/passes/${pass.token}/stamp-strip?v=${(pass.data as StampsData).currentStamps}`,
           },
-          id: 'stamp_grid',
+          contentDescription: { defaultValue: { language: 'es', value: 'Sellos acumulados' } },
         },
-      ]
-    : []
+      }
+    : {}
 
   return {
     id: objectId,
@@ -158,12 +155,12 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
     textModulesData: [
       { header: 'Info', body: secondaryText, id: 'info' },
     ],
-    ...(stampImageModule.length > 0 ? { imageModulesData: stampImageModule } : {}),
     barcode: {
       type: 'QR_CODE',
       value: `${API_URL}/w/${pass.token}`,
     },
     hexBackgroundColor: wallet.primaryColor,
+    ...stampHeroImage,
   }
 }
 

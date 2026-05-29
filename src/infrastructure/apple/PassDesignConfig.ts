@@ -24,7 +24,7 @@ export const PassDesignConfig = {
     /** Espacio entre círculos en px @2x. */
     circleGap: 14,
     /** Padding superior dentro del strip en px @2x. */
-    paddingTop: 24,
+    paddingTop: 40,
     /** Alto máximo del strip @2x para storeCard (Apple Wallet). */
     maxStripHeight: 576,
   },
