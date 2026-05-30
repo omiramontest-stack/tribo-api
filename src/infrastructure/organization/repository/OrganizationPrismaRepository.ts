@@ -27,7 +27,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
 
   async findByAdminId(adminId: string): Promise<Organization[]> {
     const memberships = await this._db.organizationMember.findMany({
-      where: { adminId },
+      where: { adminId, deletedAt: null, organization: { deletedAt: null } },
       include: { organization: true },
       orderBy: { createdAt: 'asc' },
     })
@@ -49,7 +49,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
 
   async findMembers(organizationId: string): Promise<OrganizationMember[]> {
     const rows = await this._db.organizationMember.findMany({
-      where: { organizationId },
+      where: { organizationId, deletedAt: null },
       include: { admin: { select: { email: true } } },
       orderBy: { createdAt: 'asc' },
     })

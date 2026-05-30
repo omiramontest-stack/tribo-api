@@ -57,9 +57,35 @@ export function passRoutes(
     app.get('/dl/:token', async (request, reply) => {
       const { token } = request.params as { token: string }
       const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173'
+      const ua = (request.headers['user-agent'] ?? '').toLowerCase()
+      const isBot = ua.includes('whatsapp') || ua.includes('facebookexternalhit') || ua.includes('twitterbot')
+
       try {
         const { passToken } = await validateDownloadToken.run(token)
-        reply.redirect(`${frontendUrl}/w/${passToken}?dl=${token}`)
+        const destination = `${frontendUrl}/w/${passToken}?dl=${token}`
+
+        if (isBot) {
+          const { wallet } = await getPassByToken.run(passToken)
+          const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+          const title = esc(`${wallet.businessName} — Tu wallet digital`)
+          const description = esc(wallet.description || `Abre tu wallet de ${wallet.businessName}`)
+          const image = wallet.logoUrl ? esc(wallet.logoUrl) : ''
+          const destEsc = esc(destination)
+
+          return reply
+            .type('text/html')
+            .send(`<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+${image ? `<meta property="og:image" content="${image}">` : ''}
+<meta property="og:url" content="${destEsc}">
+<meta property="og:type" content="website">
+<meta http-equiv="refresh" content="0;url=${destEsc}">
+</head><body><script>location.href="${destEsc}"</script></body></html>`)
+        }
+
+        reply.redirect(destination)
       } catch {
         reply.redirect(`${frontendUrl}/link-expirado`)
       }

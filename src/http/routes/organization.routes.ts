@@ -8,8 +8,17 @@ import type { AcceptInvitationUseCase } from '../../application/organization/use
 import type { UpdateOrganizationUseCase } from '../../application/organization/useCases/UpdateOrganizationUseCase.js'
 import type { UpdateMemberRoleUseCase } from '../../application/organization/useCases/UpdateMemberRoleUseCase.js'
 import type { RemoveMemberUseCase } from '../../application/organization/useCases/RemoveMemberUseCase.js'
+import type { CreateOrganizationUseCase } from '../../application/organization/useCases/CreateOrganizationUseCase.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { signTokens, COOKIE_OPTS } from '../utils/tokens.js'
+
+const createOrgSchema = z.object({
+  organizationName: z.string().min(1),
+  industry: z.string().optional(),
+  country: z.string().optional(),
+  phone: z.string().optional(),
+  logoUrl: z.string().url().optional(),
+})
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -42,10 +51,19 @@ export function organizationRoutes(
   updateOrganization: UpdateOrganizationUseCase,
   updateMemberRole: UpdateMemberRoleUseCase,
   removeMember: RemoveMemberUseCase,
+  createOrganization: CreateOrganizationUseCase,
 ) {
   return async (app: FastifyInstance) => {
     app.get('/organizations', { preHandler: authenticate }, async (request, reply) => {
       reply.send(await getMyOrganizations.run(request.admin.adminId))
+    })
+
+    app.post('/organizations', { preHandler: authenticate }, async (request, reply) => {
+      const body = createOrgSchema.safeParse(request.body)
+      if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
+
+      const organization = await createOrganization.run({ adminId: request.admin.adminId, ...body.data })
+      reply.code(201).send({ organization })
     })
 
     app.patch('/organizations/:id', { preHandler: authenticate }, async (request, reply) => {

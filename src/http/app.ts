@@ -33,6 +33,7 @@ import { AcceptInvitationUseCase } from '../application/organization/useCases/Ac
 import { UpdateOrganizationUseCase } from '../application/organization/useCases/UpdateOrganizationUseCase.js'
 import { UpdateMemberRoleUseCase } from '../application/organization/useCases/UpdateMemberRoleUseCase.js'
 import { RemoveMemberUseCase } from '../application/organization/useCases/RemoveMemberUseCase.js'
+import { CreateOrganizationUseCase } from '../application/organization/useCases/CreateOrganizationUseCase.js'
 
 // Use cases — wallet
 import { CreateWalletUseCase } from '../application/wallet/useCases/CreateWalletUseCase.js'
@@ -159,6 +160,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const updateOrganization = new UpdateOrganizationUseCase(orgRepo)
   const updateMemberRole = new UpdateMemberRoleUseCase(orgRepo)
   const removeMember = new RemoveMemberUseCase(orgRepo)
+  const createOrganization = new CreateOrganizationUseCase(orgRepo, billingRepo)
 
   // Wallet use cases
   const createWallet = new CreateWalletUseCase(walletRepo, orgRepo)
@@ -219,7 +221,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
 
   // Routes
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo))
-  app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember))
+  app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember, createOrganization))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
