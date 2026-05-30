@@ -169,7 +169,7 @@ export class WhatsAppSessionManager {
       auth: state,
       printQRInTerminal: false,
       browser: ['Tribo', 'Chrome', '120.0'],
-      generateHighQualityLinkPreview: false,
+      generateHighQualityLinkPreview: true,
       syncFullHistory: false,
       markOnlineOnConnect: false,
       maxMsgRetryCount: 0,
