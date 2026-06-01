@@ -1,5 +1,5 @@
 import type { PrismaClient, Pass as PrismaPass } from '@prisma/client'
-import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
+import type { PassRepository, PassFilters } from '../../../domain/pass/repository/PassRepository.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { PassData } from '../../../domain/pass/entities/PassData.js'
 import type { PaginationParams, PaginatedResult } from '../../../application/common/Pagination.js'
@@ -25,8 +25,20 @@ export class PassPrismaRepository implements PassRepository {
     })
   }
 
-  async findByWalletId(walletId: string, pagination: PaginationParams): Promise<PaginatedResult<Pass>> {
-    const where = { walletId, deletedAt: null }
+  async findByWalletId(walletId: string, pagination: PaginationParams, filters?: PassFilters): Promise<PaginatedResult<Pass>> {
+    const search = filters?.search?.trim()
+    const ilike = (value: string) => ({ contains: value, mode: 'insensitive' as const })
+    const where = {
+      walletId,
+      deletedAt: null,
+      ...(search ? {
+        OR: [
+          { firstName: ilike(search) },
+          { lastName:  ilike(search) },
+          { phone:     ilike(search) },
+        ],
+      } : {}),
+    }
     const { skip, take } = paginate(pagination)
     const [rows, total] = await Promise.all([
       this._db.pass.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),

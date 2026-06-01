@@ -10,6 +10,7 @@ export interface GetPassesByWalletDto {
   adminId: string
   organizationId: string
   pagination: PaginationParams
+  search?: string
 }
 
 export class GetPassesByWalletUseCase {
@@ -28,6 +29,6 @@ export class GetPassesByWalletUseCase {
     const isMember = await this._orgRepository.isMember(dto.adminId, dto.organizationId)
     if (!isMember) throw new AppError('FORBIDDEN', 'Forbidden', 403)
 
-    return this._passRepository.findByWalletId(dto.walletId, dto.pagination)
+    return this._passRepository.findByWalletId(dto.walletId, dto.pagination, { search: dto.search })
   }
 }

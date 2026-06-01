@@ -142,11 +142,13 @@ ${image ? `<meta property="og:image" content="${image}">` : ''}
     // Protected — admin actions
     app.get('/wallets/:walletId/passes', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { walletId } = request.params as { walletId: string }
+      const query = request.query as Record<string, string>
       reply.send(await getPassesByWallet.run({
         walletId,
         adminId: request.admin.adminId,
         organizationId: request.admin.organizationId!,
-        pagination: parsePagination(request.query as Record<string, string>),
+        pagination: parsePagination(query),
+        search: query.search,
       }))
     })
 
