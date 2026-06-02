@@ -17,7 +17,7 @@ export class SessionCodePrismaRepository implements SessionCodeRepository {
 
   async consume(id: string): Promise<SessionCode | null> {
     return this._db.$transaction(async (tx) => {
-      const row = await tx.sessionCode.findUnique({
+      const row = await tx.sessionCode.findFirst({
         where: { id, expiresAt: { gt: new Date() } },
       })
       if (!row) return null
