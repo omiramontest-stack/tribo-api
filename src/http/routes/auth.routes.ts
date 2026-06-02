@@ -302,7 +302,7 @@ export function authRoutes(
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
       await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
 
-      const clientUrl = (process.env.CLIENT_URL ?? 'http://localhost:5173').split(',')[0].trim()
+      const clientUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173'
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
