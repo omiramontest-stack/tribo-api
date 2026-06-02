@@ -8,6 +8,7 @@ import { WalletPrismaRepository } from '../infrastructure/wallet/repository/Wall
 import { PassPrismaRepository } from '../infrastructure/pass/repository/PassPrismaRepository.js'
 import { PassDownloadTokenPrismaRepository } from '../infrastructure/pass/repository/PassDownloadTokenPrismaRepository.js'
 import { AuthPrismaRepository } from '../infrastructure/auth/repository/AuthPrismaRepository.js'
+import { SessionCodePrismaRepository } from '../infrastructure/auth/repository/SessionCodePrismaRepository.js'
 import { OrganizationPrismaRepository } from '../infrastructure/organization/repository/OrganizationPrismaRepository.js'
 import { InvitationPrismaRepository } from '../infrastructure/organization/repository/InvitationPrismaRepository.js'
 
@@ -15,6 +16,8 @@ import { InvitationPrismaRepository } from '../infrastructure/organization/repos
 import { LoginUseCase } from '../application/auth/useCases/LoginUseCase.js'
 import { RegisterUseCase } from '../application/auth/useCases/RegisterUseCase.js'
 import { GoogleAuthUseCase } from '../application/auth/useCases/GoogleAuthUseCase.js'
+import { CreateSessionCodeUseCase } from '../application/auth/useCases/CreateSessionCodeUseCase.js'
+import { ExchangeSessionCodeUseCase } from '../application/auth/useCases/ExchangeSessionCodeUseCase.js'
 import { OnboardingUseCase } from '../application/auth/useCases/OnboardingUseCase.js'
 import { SendVerificationEmailUseCase } from '../application/auth/useCases/SendVerificationEmailUseCase.js'
 import { VerifyEmailUseCase } from '../application/auth/useCases/VerifyEmailUseCase.js'
@@ -139,9 +142,12 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const createTrial = new CreateTrialUseCase(billingRepo, orgRepo)
 
   // Auth use cases
+  const sessionCodeRepo = new SessionCodePrismaRepository(prisma)
   const loginUseCase = new LoginUseCase(authRepo)
   const registerUseCase = new RegisterUseCase(authRepo)
   const googleAuthUseCase = new GoogleAuthUseCase(authRepo)
+  const createSessionCode = new CreateSessionCodeUseCase(sessionCodeRepo)
+  const exchangeSessionCode = new ExchangeSessionCodeUseCase(sessionCodeRepo, authRepo)
   const onboardingUseCase = new OnboardingUseCase(orgRepo, billingRepo, createTrial)
   const sendVerificationEmail = new SendVerificationEmailUseCase(authRepo)
   const verifyEmail = new VerifyEmailUseCase(authRepo)
@@ -220,7 +226,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const planGuard = createPlanGuard(billingRepo)
 
   // Routes
-  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo))
+  app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo, createSessionCode, exchangeSessionCode))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember, createOrganization))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp))

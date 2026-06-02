@@ -23,6 +23,17 @@ model Admin {
   createdAt                       DateTime             @default(now())
   deletedAt                       DateTime?
   memberships                     OrganizationMember[]
+  sessionCodes                    SessionCode[]
+}
+
+model SessionCode {
+  id        String   @id
+  adminId   String
+  expiresAt DateTime
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
 }
 
 enum MemberRole {

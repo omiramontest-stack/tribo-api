@@ -13,6 +13,8 @@ import type { ConfirmEmailChangeUseCase } from '../../application/auth/useCases/
 import type { ChangePasswordUseCase } from '../../application/auth/useCases/ChangePasswordUseCase.js'
 import type { RequestPasswordResetUseCase } from '../../application/auth/useCases/RequestPasswordResetUseCase.js'
 import type { ResetPasswordUseCase } from '../../application/auth/useCases/ResetPasswordUseCase.js'
+import type { CreateSessionCodeUseCase } from '../../application/auth/useCases/CreateSessionCodeUseCase.js'
+import type { ExchangeSessionCodeUseCase } from '../../application/auth/useCases/ExchangeSessionCodeUseCase.js'
 import type { OrganizationRepository } from '../../domain/organization/repository/OrganizationRepository.js'
 import type { AuthRepository } from '../../domain/auth/repository/AuthRepository.js'
 import { authenticate } from '../middlewares/authenticate.js'
@@ -72,6 +74,8 @@ export function authRoutes(
   requestPasswordReset: RequestPasswordResetUseCase,
   resetPassword: ResetPasswordUseCase,
   authRepository: AuthRepository,
+  createSessionCode: CreateSessionCodeUseCase,
+  exchangeSessionCode: ExchangeSessionCodeUseCase,
 ) {
   return async (app: FastifyInstance) => {
     app.post('/auth/register', async (request, reply) => {
@@ -248,8 +252,8 @@ export function authRoutes(
     })
 
     app.get('/auth/google/callback', async (request, reply) => {
-      const { code } = request.query as { code?: string }
-      if (!code) return reply.code(400).send({ error: 'Missing code' })
+      const { code: authCode } = request.query as { code?: string }
+      if (!authCode) return reply.code(400).send({ error: 'Missing code' })
 
       const clientId = process.env.GOOGLE_CLIENT_ID
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET
@@ -262,7 +266,7 @@ export function authRoutes(
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          code,
+          code: authCode,
           client_id: clientId,
           client_secret: clientSecret,
           redirect_uri: redirectUri,
@@ -299,15 +303,23 @@ export function authRoutes(
         name: payload.name,
       })
 
+      const code = await createSessionCode.run({ adminId: admin.id })
+      const clientUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173'
+      reply.redirect(`${clientUrl}?code=${code}`)
+    })
+
+    app.post('/auth/session/exchange', async (request, reply) => {
+      const { code } = request.body as { code?: string }
+      if (!code) return reply.code(400).send({ error: 'Missing code' })
+
+      const admin = await exchangeSessionCode.run({ code })
       const { accessToken, refreshToken } = signTokens(admin.id, admin.email, undefined, admin.emailVerified)
       await authRepository.setRefreshTokenHash(admin.id, hashToken(refreshToken))
-
-      const clientUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173'
 
       reply
         .setCookie('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 })
         .setCookie('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 })
-        .redirect(clientUrl)
+        .send({ admin, accessToken })
     })
   }
 }
