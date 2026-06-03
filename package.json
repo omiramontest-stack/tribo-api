@@ -46,6 +46,7 @@
     "fastify-plugin": "^5.1.0",
     "google-auth-library": "^10.6.2",
     "jsonwebtoken": "^9.0.3",
+    "link-preview-js": "^3.0.0",
     "passkit-generator": "^3.5.7",
     "pg": "^8.20.0",
     "resend": "^6.12.2",
