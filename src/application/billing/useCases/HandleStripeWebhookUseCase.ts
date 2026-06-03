@@ -1,6 +1,5 @@
 import type { BillingRepository } from '../../../domain/billing/repository/BillingRepository.js'
 import type { StripeService, StripeWebhookPayload } from '../../../infrastructure/billing/stripe/StripeService.js'
-import type { PlanSlug } from '../../../domain/billing/entities/Plan.js'
 import { invalidatePlanCache } from '../../../http/middlewares/checkPlan.js'
 
 export class HandleStripeWebhookUseCase {
@@ -55,9 +54,8 @@ export class HandleStripeWebhookUseCase {
       const stripeSubscriptionId = data['subscription'] as string
       const subData = await this._stripeService.getSubscription(stripeSubscriptionId)
       const priceId = subData.priceId
-      const planSlug = subData.planSlug as PlanSlug
 
-      const plan = await this._billingRepo.findPlanBySlug(planSlug)
+      const plan = await this._billingRepo.findPlanByStripePriceId(priceId)
       if (!plan) return
 
       const existing = await this._billingRepo.findSubscriptionByOrg(organizationId)
@@ -104,15 +102,14 @@ export class HandleStripeWebhookUseCase {
     const currentPeriodEnd = new Date((data['current_period_end'] as number) * 1000).toISOString()
 
     // Detectar cambio de plan (upgrade/downgrade vía Customer Portal)
-    const items = data['items'] as { data: Array<{ price: { id: string; metadata?: Record<string, string> } }> } | undefined
+    const items = data['items'] as { data: Array<{ price: { id: string } }> } | undefined
     const newPriceId = items?.data?.[0]?.price?.id
-    const newPlanSlug = items?.data?.[0]?.price?.metadata?.['planSlug'] as PlanSlug | undefined
 
     let planId = subscription.planId
     let stripePriceId = subscription.stripePriceId
 
-    if (newPriceId && newPriceId !== subscription.stripePriceId && newPlanSlug) {
-      const newPlan = await this._billingRepo.findPlanBySlug(newPlanSlug)
+    if (newPriceId && newPriceId !== subscription.stripePriceId) {
+      const newPlan = await this._billingRepo.findPlanByStripePriceId(newPriceId)
       if (newPlan) {
         planId = newPlan.id
         stripePriceId = newPriceId

@@ -5,6 +5,7 @@ import type { SmsCreditPack } from '../entities/SmsCreditPack.js'
 export interface BillingRepository {
   // Plans
   findPlanBySlug(slug: PlanSlug): Promise<Plan | null>
+  findPlanByStripePriceId(priceId: string): Promise<Plan | null>
   findAllActivePlans(): Promise<Plan[]>
 
   // Subscriptions

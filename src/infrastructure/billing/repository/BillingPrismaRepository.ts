@@ -63,6 +63,11 @@ export class BillingPrismaRepository implements BillingRepository {
     return r ? toPlan(r) : null
   }
 
+  async findPlanByStripePriceId(priceId: string): Promise<Plan | null> {
+    const r = await this._db.plan.findFirst({ where: { stripePriceId: priceId } })
+    return r ? toPlan(r) : null
+  }
+
   async findAllActivePlans(): Promise<Plan[]> {
     const rows = await this._db.plan.findMany({ where: { isActive: true }, orderBy: { price: 'asc' } })
     return rows.map(toPlan)
