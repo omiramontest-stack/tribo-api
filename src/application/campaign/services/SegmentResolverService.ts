@@ -6,7 +6,7 @@ import type { Segment } from '../../../domain/campaign/entities/Segment.js'
 type RawPass = {
   id: string; walletId: string; token: string; firstName: string
   lastName: string; phone: string; email: string | null; data: unknown; createdAt: Date
-  deletedAt: Date | null
+  updatedAt?: Date; deletedAt: Date | null
 }
 
 function toPass(r: RawPass): Pass {
@@ -19,6 +19,7 @@ function toPass(r: RawPass): Pass {
     email: r.email ?? null,
     data: r.data as PassData,
     createdAt: r.createdAt.toISOString(),
+    updatedAt: (r.updatedAt ?? r.createdAt).toISOString(),
     deletedAt: r.deletedAt?.toISOString() ?? null,
   }
 }

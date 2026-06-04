@@ -131,6 +131,13 @@ export class PassPrismaRepository implements PassRepository {
     return rows.map(r => r.pushToken)
   }
 
+  async touchAllByWalletId(walletId: string): Promise<void> {
+    await this._db.pass.updateMany({
+      where: { walletId, deletedAt: null },
+      data: { updatedAt: new Date() },
+    })
+  }
+
   private _toEntity(row: PrismaPass): Pass {
     return {
       id: row.id,
@@ -143,6 +150,7 @@ export class PassPrismaRepository implements PassRepository {
       email: row.email ?? null,
       data: row.data as unknown as PassData,
       createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,
     }
   }

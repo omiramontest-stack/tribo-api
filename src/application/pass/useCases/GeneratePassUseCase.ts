@@ -71,6 +71,7 @@ export class GeneratePassUseCase implements UseCase<GeneratePassDto, Pass> {
       email: dto.email ?? null,
       data,
       createdAt: now,
+      updatedAt: now,
       deletedAt: null,
     }
 

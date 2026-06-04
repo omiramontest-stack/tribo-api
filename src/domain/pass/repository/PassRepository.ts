@@ -24,4 +24,6 @@ export interface PassRepository {
   findAllByWalletId(walletId: string): Promise<Pass[]>
   /** Devuelve todos los Apple push tokens registrados para cualquier pass de una wallet. */
   findAllPushTokensByWalletId(walletId: string): Promise<string[]>
+  /** Actualiza updatedAt de todos los passes activos de una wallet para que Apple los descargue en el próximo ciclo de actualización. */
+  touchAllByWalletId(walletId: string): Promise<void>
 }

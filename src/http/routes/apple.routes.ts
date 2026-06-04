@@ -225,16 +225,41 @@ export function appleRoutes(
     // no lleva authToken ya que no está atado a un pass específico. Sin embargo,
     // solo Apple debería llamarlo; lo dejamos sin auth ya que el deviceLibraryIdentifier
     // no expone datos sensibles más allá de los seriales.
+    //
+    // passesUpdatedSince: ISO timestamp enviado por Apple del último lastUpdated conocido.
+    // Si está presente, solo devolvemos passes cuyo updatedAt sea posterior a ese timestamp,
+    // evitando que una actualización de wallet X provoque re-descarga de passes de wallet Y.
     app.get('/v1/devices/:deviceLibraryIdentifier/registrations/:passTypeIdentifier', async (request, reply) => {
       const { deviceLibraryIdentifier } = request.params as Record<string, string>
+      const { passesUpdatedSince } = request.query as { passesUpdatedSince?: string }
 
       const registrations = await db.deviceRegistration.findMany({
         where: { deviceLibraryIdentifier },
+        select: { passToken: true },
       })
 
       if (!registrations.length) return reply.code(204).send()
 
-      const serialNumbers = registrations.map(r => r.passToken)
+      const allTokens = registrations.map(r => r.passToken)
+
+      let serialNumbers: string[]
+
+      if (passesUpdatedSince) {
+        const since = new Date(passesUpdatedSince)
+        const updatedPasses = await db.pass.findMany({
+          where: {
+            token: { in: allTokens },
+            updatedAt: { gt: since },
+            deletedAt: null,
+          },
+          select: { token: true },
+        })
+        serialNumbers = updatedPasses.map(p => p.token)
+      } else {
+        serialNumbers = allTokens
+      }
+
+      if (!serialNumbers.length) return reply.code(204).send()
 
       reply.send({ serialNumbers, lastUpdated: new Date().toISOString() })
     })

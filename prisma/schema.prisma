@@ -165,6 +165,7 @@ model Pass {
   email                String?
   data                 Json
   createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @default(now()) @updatedAt
   deletedAt            DateTime?
   createdBy            String?
   wallet               Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)

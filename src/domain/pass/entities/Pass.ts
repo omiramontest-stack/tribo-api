@@ -12,5 +12,6 @@ export interface Pass {
   email: string | null
   data: PassData
   createdAt: string
+  updatedAt: string
   deletedAt: string | null
 }

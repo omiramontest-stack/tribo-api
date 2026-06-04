@@ -65,6 +65,11 @@ export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
   }
 
   private async _dispatchDeviceUpdates(wallet: Wallet): Promise<void> {
+    // Marcar passes como actualizados ANTES de notificar para que el endpoint Apple
+    // /v1/devices/:deviceId/registrations filtre correctamente por passesUpdatedSince
+    // y solo devuelva los passes de esta wallet, no los de otras wallets del dispositivo.
+    await this._passRepository.touchAllByWalletId(wallet.id)
+
     const [passes, pushTokens] = await Promise.all([
       this._passRepository.findAllByWalletId(wallet.id),
       this._passRepository.findAllPushTokensByWalletId(wallet.id),
