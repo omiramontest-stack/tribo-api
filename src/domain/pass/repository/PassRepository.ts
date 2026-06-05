@@ -1,8 +1,9 @@
-import type { Pass } from '../entities/Pass.js'
+import type { Pass, PassStatus } from '../entities/Pass.js'
 import type { PaginationParams, PaginatedResult } from '../../../application/common/Pagination.js'
 
 export interface PassFilters {
   search?: string
+  status?: PassStatus
 }
 
 export interface PassRepository {

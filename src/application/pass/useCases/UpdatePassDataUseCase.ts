@@ -10,7 +10,8 @@ import type { PassWithWallet } from './GetPassByTokenUseCase.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { PassData, StampsData, MembershipData, PointsData, CashbackData, BundleData, GiftCardData, CouponData } from '../../../domain/pass/entities/PassData.js'
-import type { StampsRules, MembershipRules, CashbackRules, CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { PassStatus } from '../../../domain/pass/entities/Pass.js'
+import type { StampsRules, MembershipRules, CashbackRules, CouponRules, PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
 import { updateGoogleWalletObject } from '../../../infrastructure/google/GoogleWalletService.js'
@@ -22,6 +23,7 @@ function roundCents(value: number): number {
 
 type ActionResult = {
   updatedData: PassData
+  newStatus?: PassStatus
   eventType: PassEventType
   eventMetadata: Record<string, unknown>
 }
@@ -46,6 +48,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
 
     const result = await this.resolveAction(pass, wallet, dto)
     pass.data = result.updatedData
+    if (result.newStatus) pass.status = result.newStatus
 
     const updated = await this._passRepository.update(pass)
     await this.dispatchUpdates(updated, wallet, dto, result)
@@ -70,7 +73,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       return this.applyAddStamp(data, wallet.rules as StampsRules)
 
     if (action === 'add_points' && data.type === 'points')
-      return this.applyAddPoints(data, dto.amount ?? 1)
+      return this.applyAddPoints(data, dto.amount ?? 1, wallet.rules as PointsRules)
 
     if (action === 'renew_membership' && data.type === 'membership')
       return this.applyRenewMembership(data, wallet.rules as MembershipRules)
@@ -137,17 +140,20 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     const isComplete = newStamps >= rules.totalStamps
     return {
       updatedData: { ...data, currentStamps: newStamps },
+      newStatus: isComplete ? 'completed' : undefined,
       eventType: isComplete ? 'stamp_redeemed' : 'stamp_added',
       eventMetadata: { currentStamps: newStamps, totalStamps: rules.totalStamps },
     }
   }
 
-  private applyAddPoints(data: PointsData, amount: number): ActionResult {
+  private applyAddPoints(data: PointsData, amount: number, rules: PointsRules): ActionResult {
     const newPoints = data.currentPoints + amount
+    const isComplete = newPoints >= rules.rewardThreshold
     return {
       updatedData: { ...data, currentPoints: newPoints },
+      newStatus: isComplete ? 'completed' : undefined,
       eventType: 'points_added',
-      eventMetadata: { amount, currentPoints: newPoints },
+      eventMetadata: { amount, currentPoints: newPoints, rewardThreshold: rules.rewardThreshold },
     }
   }
 
@@ -225,8 +231,10 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
       throw new AppError('NO_USES_LEFT', 'No remaining uses on this bundle', 400)
 
     const newRemaining = data.remainingUses - 1
+    const isComplete = newRemaining === 0
     return {
       updatedData: { ...data, remainingUses: newRemaining },
+      newStatus: isComplete ? 'completed' : undefined,
       eventType: 'bundle_used',
       eventMetadata: { remainingUses: newRemaining },
     }

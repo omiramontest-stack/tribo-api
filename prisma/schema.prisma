@@ -151,6 +151,12 @@ model DeviceRegistration {
   @@index([passToken])
 }
 
+enum PassStatus {
+  active
+  completed
+  archived
+}
+
 model Pass {
   id                   String                @id @default(cuid())
   walletId             String
@@ -164,6 +170,7 @@ model Pass {
   phone                String
   email                String?
   data                 Json
+  status               PassStatus            @default(active)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @default(now()) @updatedAt
   deletedAt            DateTime?
@@ -174,6 +181,7 @@ model Pass {
   downloadTokens       PassDownloadToken[]
 
   @@index([walletId])
+  @@index([walletId, status])
 }
 
 model PassDownloadToken {

@@ -11,6 +11,7 @@ import type { GetScannedDaypassesUseCase } from '../../application/pass/useCases
 import type { SendPassLinkUseCase } from '../../application/pass/useCases/SendPassLinkUseCase.js'
 import type { SendPassWhatsAppUseCase } from '../../application/pass/useCases/SendPassWhatsAppUseCase.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
+import type { RenewPassUseCase } from '../../application/pass/useCases/RenewPassUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { buildStampsHeroImage } from '../../infrastructure/apple/assets/StampsStripGenerator.js'
@@ -51,6 +52,7 @@ export function passRoutes(
   passRepo: PassRepository,
   planGuard: PlanGuard,
   sendPassWhatsApp: SendPassWhatsAppUseCase,
+  renewPass: RenewPassUseCase,
 ) {
   return async (app: FastifyInstance) => {
     // Public — validate short link, always return OG meta HTML with instant JS redirect.
@@ -139,12 +141,14 @@ ${image ? `<meta property="og:image" content="${image}">` : ''}
     app.get('/wallets/:walletId/passes', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { walletId } = request.params as { walletId: string }
       const query = request.query as Record<string, string>
+      const status = query.status as 'active' | 'completed' | 'archived' | undefined
       reply.send(await getPassesByWallet.run({
         walletId,
         adminId: request.admin.adminId,
         organizationId: request.admin.organizationId!,
         pagination: parsePagination(query),
         search: query.search,
+        status,
       }))
     })
 
@@ -202,6 +206,15 @@ ${image ? `<meta property="og:image" content="${image}">` : ''}
         organizationId: request.admin.organizationId!,
       })
       reply.send({ ok: true })
+    })
+
+    app.post('/passes/:token/renew', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
+      const { token } = request.params as { token: string }
+      reply.code(201).send(await renewPass.run({
+        token,
+        adminId: request.admin.adminId,
+        organizationId: request.admin.organizationId!,
+      }))
     })
 
     app.delete('/passes/:token', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {

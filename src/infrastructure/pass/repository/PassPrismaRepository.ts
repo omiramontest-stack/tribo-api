@@ -1,6 +1,6 @@
 import type { PrismaClient, Pass as PrismaPass } from '@prisma/client'
 import type { PassRepository, PassFilters } from '../../../domain/pass/repository/PassRepository.js'
-import type { Pass } from '../../../domain/pass/entities/Pass.js'
+import type { Pass, PassStatus } from '../../../domain/pass/entities/Pass.js'
 import type { PassData } from '../../../domain/pass/entities/PassData.js'
 import type { PaginationParams, PaginatedResult } from '../../../application/common/Pagination.js'
 import { paginate, toPaginatedResult } from '../../../application/common/Pagination.js'
@@ -31,6 +31,7 @@ export class PassPrismaRepository implements PassRepository {
     const where = {
       walletId,
       deletedAt: null,
+      ...(filters?.status ? { status: filters.status } : {}),
       ...(search ? {
         OR: [
           { firstName: ilike(search) },
@@ -69,6 +70,7 @@ export class PassPrismaRepository implements PassRepository {
         phone: pass.phone,
         email: pass.email,
         data: pass.data as object,
+        status: pass.status,
       },
     })
     return this._toEntity(row)
@@ -85,7 +87,7 @@ export class PassPrismaRepository implements PassRepository {
   async update(pass: Pass): Promise<Pass> {
     const row = await this._db.pass.update({
       where: { id: pass.id },
-      data: { data: pass.data as object },
+      data: { data: pass.data as object, status: pass.status },
     })
     return this._toEntity(row)
   }
@@ -149,6 +151,7 @@ export class PassPrismaRepository implements PassRepository {
       phone: row.phone,
       email: row.email ?? null,
       data: row.data as unknown as PassData,
+      status: row.status as PassStatus,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,

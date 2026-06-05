@@ -2,7 +2,7 @@ import type { PassRepository } from '../../../domain/pass/repository/PassReposit
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { PaginationParams, PaginatedResult } from '../../common/Pagination.js'
-import type { Pass } from '../../../domain/pass/entities/Pass.js'
+import type { Pass, PassStatus } from '../../../domain/pass/entities/Pass.js'
 import { AppError } from '../../common/AppError.js'
 
 export interface GetPassesByWalletDto {
@@ -11,6 +11,7 @@ export interface GetPassesByWalletDto {
   organizationId: string
   pagination: PaginationParams
   search?: string
+  status?: PassStatus
 }
 
 export class GetPassesByWalletUseCase {
@@ -29,6 +30,6 @@ export class GetPassesByWalletUseCase {
     const isMember = await this._orgRepository.isMember(dto.adminId, dto.organizationId)
     if (!isMember) throw new AppError('FORBIDDEN', 'Forbidden', 403)
 
-    return this._passRepository.findByWalletId(dto.walletId, dto.pagination, { search: dto.search })
+    return this._passRepository.findByWalletId(dto.walletId, dto.pagination, { search: dto.search, status: dto.status })
   }
 }
