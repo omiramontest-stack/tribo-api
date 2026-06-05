@@ -70,6 +70,7 @@ export class GeneratePassUseCase implements UseCase<GeneratePassDto, Pass> {
       phone: dto.phone,
       email: dto.email ?? null,
       data,
+      status: 'active',
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
