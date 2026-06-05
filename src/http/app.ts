@@ -56,6 +56,7 @@ import { GetScannedDaypassesUseCase } from '../application/pass/useCases/GetScan
 import { SendPassLinkUseCase } from '../application/pass/useCases/SendPassLinkUseCase.js'
 import { SendPassWhatsAppUseCase } from '../application/pass/useCases/SendPassWhatsAppUseCase.js'
 import { RenewPassUseCase } from '../application/pass/useCases/RenewPassUseCase.js'
+import { UnarchivePassUseCase } from '../application/pass/useCases/UnarchivePassUseCase.js'
 import { WhatsAppSessionManager } from '../infrastructure/whatsapp/WhatsAppSessionManager.js'
 import { WhatsAppCleanupWorker } from '../infrastructure/whatsapp/WhatsAppCleanupWorker.js'
 import { SseTokenStore } from '../infrastructure/whatsapp/SseTokenStore.js'
@@ -186,6 +187,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getScannedDaypasses = new GetScannedDaypassesUseCase(passRepo, walletRepo, orgRepo)
   const sendPassLink = new SendPassLinkUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo)
   const renewPass = new RenewPassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
+  const unarchivePass = new UnarchivePassUseCase(passRepo, walletRepo, orgRepo)
   const whatsappManager = new WhatsAppSessionManager(prisma)
   const whatsappCleanup = new WhatsAppCleanupWorker(prisma)
   const sseTokenStore = new SseTokenStore()
@@ -231,7 +233,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo, createSessionCode, exchangeSessionCode))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember, createOrganization))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
-  app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp, renewPass))
+  app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp, renewPass, unarchivePass))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
   app.register(appleRoutes(prisma, passRepo, walletRepo, validateDownloadToken, redeemDownloadToken))
   app.register(analyticsRoutes(getOrgAnalytics, getWalletAnalytics))

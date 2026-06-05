@@ -47,9 +47,11 @@ export interface WalletSummary {
 }
 
 export interface TopCustomer {
+  phone: string
   firstName: string
   lastName: string
   eventCount: number
+  completions: number
 }
 
 export interface WalletInsights {

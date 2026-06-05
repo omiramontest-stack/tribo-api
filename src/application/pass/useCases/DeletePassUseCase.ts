@@ -32,6 +32,9 @@ export class DeletePassUseCase implements UseCase<DeletePassDto, void> {
     const role = await this._orgRepository.getMemberRole(dto.adminId, dto.organizationId)
     if (!role || role === 'staff') throw new AppError('FORBIDDEN', 'Only owners and admins can delete passes', 403)
 
+    if (pass.status === 'archived')
+      throw new AppError('PASS_ARCHIVED', 'Archived passes cannot be deleted. Unarchive it first.', 400)
+
     await this._passRepository.delete(pass.id)
 
     await this._passEventRepository.save({

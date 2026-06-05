@@ -261,14 +261,17 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
         ORDER BY count DESC
         LIMIT 1`,
 
-      // Top 10 passes más activos (con nombres en un JOIN)
-      this._db.$queryRaw<{ passId: string; firstName: string; lastName: string; eventCount: bigint }[]>`
-        SELECT e."passId", p."firstName", p."lastName", COUNT(*)::bigint AS "eventCount"
+      // Top 10 clientes acumulado across todos sus passes (activos, completados, archivados).
+      // Agrupa por phone para que las renovaciones sumen en lugar de fragmentar el ranking.
+      this._db.$queryRaw<{ phone: string; firstName: string; lastName: string; eventCount: bigint; completions: bigint }[]>`
+        SELECT p."phone", p."firstName", p."lastName",
+               COUNT(*)::bigint AS "eventCount",
+               COUNT(*) FILTER (WHERE e."type" = 'stamp_redeemed')::bigint AS "completions"
         FROM "PassEvent" e
-        JOIN "Pass" p ON p.id = e."passId" AND p."deletedAt" IS NULL
+        JOIN "Pass" p ON p.id = e."passId"
         WHERE e."walletId" = ${walletId}
           AND e."type"::text = ANY(${SCAN_TYPES}::text[])
-        GROUP BY e."passId", p."firstName", p."lastName"
+        GROUP BY p."phone", p."firstName", p."lastName"
         ORDER BY "eventCount" DESC
         LIMIT 10`,
     ])
@@ -276,9 +279,11 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
     const bestHour = hourRows[0] ? hourRows[0].hour : null
     const bestDayOfWeek = dayRows[0] ? dayRows[0].dow : null
     const topCustomers: TopCustomer[] = topPassRows.map(r => ({
+      phone: r.phone,
       firstName: r.firstName,
       lastName: r.lastName,
       eventCount: Number(r.eventCount),
+      completions: Number(r.completions),
     }))
 
     return { bestHour, bestDayOfWeek, topCustomers }

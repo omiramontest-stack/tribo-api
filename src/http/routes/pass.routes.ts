@@ -12,6 +12,7 @@ import type { SendPassLinkUseCase } from '../../application/pass/useCases/SendPa
 import type { SendPassWhatsAppUseCase } from '../../application/pass/useCases/SendPassWhatsAppUseCase.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import type { RenewPassUseCase } from '../../application/pass/useCases/RenewPassUseCase.js'
+import type { UnarchivePassUseCase } from '../../application/pass/useCases/UnarchivePassUseCase.js'
 import { authenticate, requireOrgContext, isValidAdminRequest } from '../middlewares/authenticate.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { buildStampsHeroImage } from '../../infrastructure/apple/assets/StampsStripGenerator.js'
@@ -53,6 +54,7 @@ export function passRoutes(
   planGuard: PlanGuard,
   sendPassWhatsApp: SendPassWhatsAppUseCase,
   renewPass: RenewPassUseCase,
+  unarchivePass: UnarchivePassUseCase,
 ) {
   return async (app: FastifyInstance) => {
     // Public — validate short link, always return OG meta HTML with instant JS redirect.
@@ -211,6 +213,15 @@ ${image ? `<meta property="og:image" content="${image}">` : ''}
     app.post('/passes/:token/renew', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { token } = request.params as { token: string }
       reply.code(201).send(await renewPass.run({
+        token,
+        adminId: request.admin.adminId,
+        organizationId: request.admin.organizationId!,
+      }))
+    })
+
+    app.post('/passes/:token/unarchive', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
+      const { token } = request.params as { token: string }
+      reply.send(await unarchivePass.run({
         token,
         adminId: request.admin.adminId,
         organizationId: request.admin.organizationId!,
