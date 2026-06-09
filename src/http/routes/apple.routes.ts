@@ -9,6 +9,7 @@ import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { CashbackRules, GiftCardRules } from '../../domain/wallet/entities/WalletRules.js'
 import { generatePkPass, type RecentTransaction } from '../../infrastructure/apple/AppleWalletService.js'
 import { sendCampaignNotification } from '../../infrastructure/apple/ApnsService.js'
+import { logger } from '../../infrastructure/logger/logger.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { isValidAdminRequest } from '../middlewares/authenticate.js'
 
@@ -177,14 +178,22 @@ export function appleRoutes(
       const { deviceLibraryIdentifier, serialNumber } = request.params as Record<string, string>
       const { pushToken } = request.body as { pushToken: string }
 
+      logger.info({ deviceLibraryIdentifier, serialNumber, hasPushToken: !!pushToken }, '[Apple] device registration attempt')
+
       if (!pushToken) return reply.code(400).send()
 
       // Validar "Authorization: ApplePass <authToken>" — protocolo Apple PassKit Web Service
       const authToken = extractAppleAuthToken(request)
-      if (!authToken) return reply.code(401).send()
+      if (!authToken) {
+        logger.warn({ serialNumber }, '[Apple] registration rejected: missing authToken')
+        return reply.code(401).send()
+      }
 
       const pass = await passRepo.findByTokenAndAuthToken(serialNumber, authToken)
-      if (!pass) return reply.code(401).send()
+      if (!pass) {
+        logger.warn({ serialNumber }, '[Apple] registration rejected: pass not found or invalid authToken')
+        return reply.code(401).send()
+      }
 
       const existing = await db.deviceRegistration.findUnique({
         where: { deviceLibraryIdentifier_passToken: { deviceLibraryIdentifier, passToken: serialNumber } },
@@ -195,12 +204,14 @@ export function appleRoutes(
           where: { id: existing.id },
           data: { pushToken },
         })
+        logger.info({ serialNumber }, '[Apple] device registration updated (200)')
         return reply.code(200).send()
       }
 
       await db.deviceRegistration.create({
         data: { deviceLibraryIdentifier, passToken: serialNumber, pushToken },
       })
+      logger.info({ serialNumber, pushToken: pushToken.slice(-8) }, '[Apple] device registration created (201)')
 
       // Notificación de bienvenida al registrar el pase por primera vez
       const wallet = await db.wallet.findUnique({ where: { id: pass.walletId }, select: { businessName: true } })
