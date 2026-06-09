@@ -16,7 +16,7 @@ export interface PreviewAudienceDto {
 
 export interface AudiencePreview {
   count: number
-  sample: { firstName: string; lastName: string; phone: string }[]
+  sample: { id: string; firstName: string; lastName: string; phone: string }[]
   smsCost?: {
     segmentsPerMessage: number
     creditsNeeded: number
@@ -43,7 +43,7 @@ export class PreviewAudienceUseCase {
 
     const result: AudiencePreview = {
       count: passes.length,
-      sample: passes.slice(0, 5).map((p) => ({ firstName: p.firstName, lastName: p.lastName, phone: p.phone })),
+      sample: passes.map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, phone: p.phone })),
     }
 
     if (dto.channel === 'sms' && dto.messageTemplate) {
