@@ -41,14 +41,21 @@ export class SegmentResolverService {
         const rows = await this._db.$queryRaw<RawPass[]>`
           SELECT p.* FROM "Pass" p
           JOIN "Wallet" w ON p."walletId" = w.id
-          WHERE w."organizationId" = ${organizationId} AND p."deletedAt" IS NULL`
+          WHERE w."organizationId" = ${organizationId}
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL`
         return rows.map(toPass)
       }
 
       case 'all_wallet': {
         const rows = await this._db.$queryRaw<RawPass[]>`
-          SELECT * FROM "Pass"
-          WHERE "walletId" = ${segment.walletId} AND "deletedAt" IS NULL`
+          SELECT p.* FROM "Pass" p
+          JOIN "Wallet" w ON p."walletId" = w.id
+          WHERE p."walletId" = ${segment.walletId}
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL`
         return rows.map(toPass)
       }
 
@@ -58,9 +65,11 @@ export class SegmentResolverService {
           SELECT p.* FROM "Pass" p
           JOIN "Wallet" w ON p."walletId" = w.id
           WHERE p."walletId" = ${segment.walletId}
-          AND w."type" = 'stamps'
-          AND p."deletedAt" IS NULL
-          AND (p.data->>'currentStamps')::int >= FLOOR((w.rules->>'totalStamps')::int * ${threshold})`
+            AND w."type" = 'stamps'
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND (p.data->>'currentStamps')::int >= FLOOR((w.rules->>'totalStamps')::int * ${threshold})`
         return rows.map(toPass)
       }
 
@@ -69,23 +78,28 @@ export class SegmentResolverService {
         if (segment.walletId) {
           const rows = await this._db.$queryRaw<RawPass[]>`
             SELECT p.* FROM "Pass" p
+            JOIN "Wallet" w ON p."walletId" = w.id
             WHERE p."walletId" = ${segment.walletId}
-            AND p."deletedAt" IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM "PassEvent" e
-              WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}
-            )`
+              AND p."deletedAt" IS NULL
+              AND p."status" = 'active'
+              AND w."deletedAt" IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM "PassEvent" e
+                WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}
+              )`
           return rows.map(toPass)
         }
         const rows = await this._db.$queryRaw<RawPass[]>`
           SELECT p.* FROM "Pass" p
           JOIN "Wallet" w ON p."walletId" = w.id
           WHERE w."organizationId" = ${organizationId}
-          AND p."deletedAt" IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM "PassEvent" e
-            WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}
-          )`
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM "PassEvent" e
+              WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}
+            )`
         return rows.map(toPass)
       }
 
@@ -94,32 +108,40 @@ export class SegmentResolverService {
         if (segment.walletId) {
           const rows = await this._db.$queryRaw<RawPass[]>`
             SELECT p.* FROM "Pass" p
+            JOIN "Wallet" w ON p."walletId" = w.id
             WHERE p."walletId" = ${segment.walletId}
-            AND p."deletedAt" IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM "PassEvent" e
-              WHERE e."passId" = p.id AND e."type" = ANY(${redeemTypes})
-            )`
+              AND p."deletedAt" IS NULL
+              AND p."status" = 'active'
+              AND w."deletedAt" IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM "PassEvent" e
+                WHERE e."passId" = p.id AND e."type" = ANY(${redeemTypes})
+              )`
           return rows.map(toPass)
         }
         const rows = await this._db.$queryRaw<RawPass[]>`
           SELECT p.* FROM "Pass" p
           JOIN "Wallet" w ON p."walletId" = w.id
           WHERE w."organizationId" = ${organizationId}
-          AND p."deletedAt" IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM "PassEvent" e
-            WHERE e."passId" = p.id AND e."type" = ANY(${redeemTypes})
-          )`
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM "PassEvent" e
+              WHERE e."passId" = p.id AND e."type" = ANY(${redeemTypes})
+            )`
         return rows.map(toPass)
       }
 
       case 'cashback_balance_gte': {
         const rows = await this._db.$queryRaw<RawPass[]>`
-          SELECT * FROM "Pass"
-          WHERE "walletId" = ${segment.walletId}
-          AND "deletedAt" IS NULL
-          AND (data->>'balance')::float >= ${segment.minBalance}`
+          SELECT p.* FROM "Pass" p
+          JOIN "Wallet" w ON p."walletId" = w.id
+          WHERE p."walletId" = ${segment.walletId}
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND (p.data->>'balance')::float >= ${segment.minBalance}`
         return rows.map(toPass)
       }
 
@@ -130,16 +152,23 @@ export class SegmentResolverService {
         const cutoff = new Date(Date.now() - segment.withinDays * 86400000)
         if (segment.walletId) {
           const rows = await this._db.$queryRaw<RawPass[]>`
-            SELECT * FROM "Pass"
-            WHERE "walletId" = ${segment.walletId}
-            AND "deletedAt" IS NULL AND "createdAt" >= ${cutoff}`
+            SELECT p.* FROM "Pass" p
+            JOIN "Wallet" w ON p."walletId" = w.id
+            WHERE p."walletId" = ${segment.walletId}
+              AND p."deletedAt" IS NULL
+              AND p."status" = 'active'
+              AND w."deletedAt" IS NULL
+              AND p."createdAt" >= ${cutoff}`
           return rows.map(toPass)
         }
         const rows = await this._db.$queryRaw<RawPass[]>`
           SELECT p.* FROM "Pass" p
           JOIN "Wallet" w ON p."walletId" = w.id
           WHERE w."organizationId" = ${organizationId}
-          AND p."deletedAt" IS NULL AND p."createdAt" >= ${cutoff}`
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND p."createdAt" >= ${cutoff}`
         return rows.map(toPass)
       }
     }
@@ -157,24 +186,38 @@ export class SegmentResolverService {
       if (cutoff) {
         rows = await this._db.$queryRaw<RawPass[]>`
           SELECT p.* FROM "Pass" p
-          WHERE p."walletId" = ${segment.walletId} AND p."deletedAt" IS NULL
-          AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}) >= ${minEvents}`
+          JOIN "Wallet" w ON p."walletId" = w.id
+          WHERE p."walletId" = ${segment.walletId}
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}) >= ${minEvents}`
       } else {
         rows = await this._db.$queryRaw<RawPass[]>`
           SELECT p.* FROM "Pass" p
-          WHERE p."walletId" = ${segment.walletId} AND p."deletedAt" IS NULL
-          AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id) >= ${minEvents}`
+          JOIN "Wallet" w ON p."walletId" = w.id
+          WHERE p."walletId" = ${segment.walletId}
+            AND p."deletedAt" IS NULL
+            AND p."status" = 'active'
+            AND w."deletedAt" IS NULL
+            AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id) >= ${minEvents}`
       }
     } else if (cutoff) {
       rows = await this._db.$queryRaw<RawPass[]>`
         SELECT p.* FROM "Pass" p JOIN "Wallet" w ON p."walletId" = w.id
-        WHERE w."organizationId" = ${organizationId} AND p."deletedAt" IS NULL
-        AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}) >= ${minEvents}`
+        WHERE w."organizationId" = ${organizationId}
+          AND p."deletedAt" IS NULL
+          AND p."status" = 'active'
+          AND w."deletedAt" IS NULL
+          AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id AND e."createdAt" > ${cutoff}) >= ${minEvents}`
     } else {
       rows = await this._db.$queryRaw<RawPass[]>`
         SELECT p.* FROM "Pass" p JOIN "Wallet" w ON p."walletId" = w.id
-        WHERE w."organizationId" = ${organizationId} AND p."deletedAt" IS NULL
-        AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id) >= ${minEvents}`
+        WHERE w."organizationId" = ${organizationId}
+          AND p."deletedAt" IS NULL
+          AND p."status" = 'active'
+          AND w."deletedAt" IS NULL
+          AND (SELECT COUNT(*) FROM "PassEvent" e WHERE e."passId" = p.id) >= ${minEvents}`
     }
     return rows.map(toPass)
   }
