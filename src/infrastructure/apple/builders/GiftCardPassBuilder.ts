@@ -19,7 +19,7 @@ export class GiftCardPassBuilder implements PassBuilder {
           { key: 'balance_label', label: 'SALDO', value: formatCurrency(data.currentBalance, rules.currency) },
         ],
         primaryFields: [
-          { key: 'balance', label: 'Saldo disponible', value: formatCurrency(data.currentBalance, rules.currency) },
+          { key: 'balance', label: 'Saldo disponible', value: formatCurrency(data.currentBalance, rules.currency), changeMessage: 'Tu saldo disponible es de %@' },
         ],
         secondaryFields: [
           { key: 'name',    label: 'Titular',      value: fullName(pass.firstName, pass.lastName) },

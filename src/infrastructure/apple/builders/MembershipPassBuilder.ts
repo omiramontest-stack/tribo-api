@@ -30,7 +30,7 @@ export class MembershipPassBuilder implements PassBuilder {
         // auxiliaryFields: nombre + vencimiento — coincide con el diseño del frontend
         auxiliaryFields: [
           { key: 'holder', label: 'NOMBRE', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'valid', label: 'VENCIMIENTO', value: expiresValue },
+          { key: 'valid', label: 'VENCIMIENTO', value: expiresValue, changeMessage: 'Membresía renovada. Válida hasta %@' },
         ],
         backFields: [
           { key: 'level_detail', label: 'Nivel de membresía', value: rules.level },

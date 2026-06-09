@@ -17,7 +17,7 @@ export class BundlePassBuilder implements PassBuilder {
       ...base,
       storeCard: {
         headerFields: [
-          { key: 'remaining', label: rules.label.toUpperCase(), value: String(data.remainingUses) },
+          { key: 'remaining', label: rules.label.toUpperCase(), value: String(data.remainingUses), changeMessage: 'Pase utilizado. Te quedan %@' },
         ],
         primaryFields: [
           { key: 'of', label: 'De un total de', value: `${rules.totalUses} ${rules.label}` },

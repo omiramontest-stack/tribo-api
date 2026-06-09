@@ -24,7 +24,7 @@ export class CashbackPassBuilder implements PassBuilder {
         // primaryFields: Apple los renderiza con tipografía grande (~38pt).
         // Sin strip.png no hay imagen que los tape, por lo que se ven completos.
         primaryFields: [
-          { key: 'balance', label: 'SALDO CASHBACK', value: balanceFormatted },
+          { key: 'balance', label: 'SALDO CASHBACK', value: balanceFormatted, changeMessage: 'Tu saldo cashback es de %@' },
         ],
 
         secondaryFields: [

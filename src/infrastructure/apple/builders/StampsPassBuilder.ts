@@ -34,7 +34,7 @@ export class StampsPassBuilder implements PassBuilder {
         auxiliaryFields: [],
         backFields: [
           { key: 'info', label: '¿Cómo ganar sellos?', value: 'Gana un sello por cada visita o compra.' },
-          { key: 'progress', label: 'Progreso', value: `${data.currentStamps} de ${rules.totalStamps}` },
+          { key: 'progress', label: 'Progreso', value: `${data.currentStamps} de ${rules.totalStamps}`, changeMessage: 'Nuevo sello registrado. Llevas %@' },
           { key: 'remaining', label: 'Sellos faltantes', value: String(remaining) },
           { key: 'reward_detail', label: 'Recompensa', value: rules.reward },
           { key: 'expires_detail', label: 'Vencimiento', value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },

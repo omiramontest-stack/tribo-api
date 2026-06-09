@@ -31,6 +31,7 @@ export class PointsPassBuilder implements PassBuilder {
             label:         'PUNTOS',
             value:         String(data.currentPoints),
             textAlignment: 'PKTextAlignmentCenter',
+            changeMessage: 'Has acumulado %@ puntos',
           },
         ],
 

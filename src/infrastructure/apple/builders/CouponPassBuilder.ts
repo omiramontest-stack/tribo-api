@@ -26,7 +26,7 @@ export class CouponPassBuilder implements PassBuilder {
         ],
         secondaryFields: [
           { key: 'name', label: 'Titular', value: fullName(pass.firstName, pass.lastName) },
-          { key: 'status', label: 'Estado', value: statusValue },
+          { key: 'status', label: 'Estado', value: statusValue, changeMessage: 'Tu cupón está %@' },
         ],
         auxiliaryFields: [
           {
