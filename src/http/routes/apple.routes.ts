@@ -8,6 +8,7 @@ import type { Pass } from '../../domain/pass/entities/Pass.js'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { CashbackRules, GiftCardRules } from '../../domain/wallet/entities/WalletRules.js'
 import { generatePkPass, type RecentTransaction } from '../../infrastructure/apple/AppleWalletService.js'
+import { sendCampaignNotification } from '../../infrastructure/apple/ApnsService.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { isValidAdminRequest } from '../middlewares/authenticate.js'
 
@@ -200,6 +201,17 @@ export function appleRoutes(
       await db.deviceRegistration.create({
         data: { deviceLibraryIdentifier, passToken: serialNumber, pushToken },
       })
+
+      // Notificación de bienvenida al registrar el pase por primera vez
+      const wallet = await db.wallet.findUnique({ where: { id: pass.walletId }, select: { businessName: true } })
+      if (wallet) {
+        sendCampaignNotification(
+          [pushToken],
+          wallet.businessName,
+          `${pass.firstName}, bienvenido a ${wallet.businessName}. ¡Disfruta de tus ventajas y regalos! 🎁`,
+        ).catch(() => {})
+      }
+
       reply.code(201).send()
     })
 

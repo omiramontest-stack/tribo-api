@@ -13,7 +13,7 @@ import type { PassData, StampsData, MembershipData, PointsData, CashbackData, Bu
 import type { PassStatus } from '../../../domain/pass/entities/Pass.js'
 import type { StampsRules, MembershipRules, CashbackRules, CouponRules, PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { AppError } from '../../common/AppError.js'
-import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
+import { sendPassUpdateNotification, sendCampaignNotification } from '../../../infrastructure/apple/ApnsService.js'
 import { updateGoogleWalletObject } from '../../../infrastructure/google/GoogleWalletService.js'
 import type { PassEventType } from '../../../domain/analytics/entities/PassEvent.js'
 
@@ -118,9 +118,12 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     result: ActionResult,
   ): Promise<void> {
     const pushTokens = await this._passRepository.findPushTokensByPassToken(pass.token)
+    const notification = this.buildEventMessage(wallet.businessName, pass.firstName, result.eventType, result.eventMetadata)
 
     await Promise.allSettled([
-      sendPassUpdateNotification(pushTokens),
+      notification
+        ? sendCampaignNotification(pushTokens, notification.title, notification.body)
+        : sendPassUpdateNotification(pushTokens),
       updateGoogleWalletObject(wallet, pass),
       this._passEventRepository.save({
         id: randomUUID(),
@@ -133,6 +136,40 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
         createdAt: new Date().toISOString(),
       }),
     ])
+  }
+
+  private buildEventMessage(
+    businessName: string,
+    firstName: string,
+    eventType: PassEventType,
+    metadata: Record<string, unknown>,
+  ): { title: string; body: string } | null {
+    const t = businessName
+    const n = firstName
+    switch (eventType) {
+      case 'stamp_added':
+        return { title: t, body: `${n}, has conseguido ${metadata.currentStamps} de ${metadata.totalStamps} sellos` }
+      case 'stamp_redeemed':
+        return { title: t, body: `¡Felicidades ${n}! Has completado tu tarjeta` }
+      case 'points_added':
+        return { title: t, body: `${n}, has ganado ${metadata.amount} puntos. Total: ${metadata.currentPoints}` }
+      case 'cashback_added':
+        return { title: t, body: `${n}, has recibido $${metadata.cashbackAmount} de cashback` }
+      case 'cashback_redeemed':
+        return { title: t, body: `${n}, has canjeado $${metadata.amount} de cashback` }
+      case 'membership_renewed':
+        return { title: t, body: `${n}, tu membresía ha sido renovada` }
+      case 'bundle_used':
+        return { title: t, body: `${n}, has usado 1 pase. Quedan ${metadata.remainingUses}` }
+      case 'giftcard_credited':
+        return { title: t, body: `${n}, tu tarjeta fue recargada con $${metadata.amount}` }
+      case 'giftcard_redeemed':
+        return { title: t, body: `${n}, has canjeado $${metadata.amount} de tu tarjeta de regalo` }
+      case 'coupon_redeemed':
+        return { title: t, body: `${n}, tu cupón ha sido aplicado: ${metadata.discountLabel}` }
+      default:
+        return null
+    }
   }
 
   private applyAddStamp(data: StampsData, rules: StampsRules): ActionResult {
