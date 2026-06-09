@@ -3,7 +3,7 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { MembershipData } from '../../../domain/pass/entities/PassData.js'
 import type { MembershipRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { txBackFields, businessRulesBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
+import { txBackFields, businessRulesBackField, campaignMessageBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 import { fetchImageBuffer } from '../utils/imageUtils.js'
 
 export class MembershipPassBuilder implements PassBuilder {
@@ -38,6 +38,7 @@ export class MembershipPassBuilder implements PassBuilder {
           { key: 'expires_detail', label: 'Vencimiento', value: expiresValue },
           ...txBackFields(txs.slice(0, 1).map(tx => ({ label: 'Última renovación', value: tx.value }))),
           ...businessRulesBackField(wallet.businessRules),
+          ...campaignMessageBackField(data as unknown as Record<string, unknown>),
         ],
       },
     }

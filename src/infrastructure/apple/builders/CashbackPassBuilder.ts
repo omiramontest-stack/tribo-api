@@ -3,7 +3,7 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { CashbackData } from '../../../domain/pass/entities/PassData.js'
 import type { CashbackRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
-import { txBackFields, businessRulesBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
+import { txBackFields, businessRulesBackField, campaignMessageBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class CashbackPassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
@@ -39,6 +39,7 @@ export class CashbackPassBuilder implements PassBuilder {
           { key: 'expires_detail', label: 'Vencimiento',   value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
           ...txBackFields(txs),
           ...businessRulesBackField(wallet.businessRules),
+          ...campaignMessageBackField(data as unknown as Record<string, unknown>),
         ],
       },
     }

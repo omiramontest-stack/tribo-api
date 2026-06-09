@@ -4,7 +4,7 @@ import type { CouponData } from '../../../domain/pass/entities/PassData.js'
 import type { CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
-import { fullName, formatDate, businessRulesBackField } from '../utils/passFieldUtils.js'
+import { fullName, formatDate, businessRulesBackField, campaignMessageBackField } from '../utils/passFieldUtils.js'
 
 export class CouponPassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass): object {
@@ -43,6 +43,7 @@ export class CouponPassBuilder implements PassBuilder {
           },
           { key: 'info', label: 'Cómo usar', value: 'Presenta este código QR al momento del pago.' },
           ...businessRulesBackField(wallet.businessRules),
+          ...campaignMessageBackField(data as unknown as Record<string, unknown>),
         ],
       },
     }

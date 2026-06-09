@@ -4,7 +4,7 @@ import type { GiftCardData } from '../../../domain/pass/entities/PassData.js'
 import type { GiftCardRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
-import { txBackFields, businessRulesBackField, fullName, formatCurrency, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
+import { txBackFields, businessRulesBackField, campaignMessageBackField, fullName, formatCurrency, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class GiftCardPassBuilder implements PassBuilder {
   buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
@@ -31,6 +31,7 @@ export class GiftCardPassBuilder implements PassBuilder {
           { key: 'expires_detail', label: 'Vencimiento', value: data.expiresAt ? formatDate(data.expiresAt) : 'Sin vencimiento' },
           ...txBackFields(txs),
           ...businessRulesBackField(wallet.businessRules),
+          ...campaignMessageBackField(data as unknown as Record<string, unknown>),
         ],
       },
     }

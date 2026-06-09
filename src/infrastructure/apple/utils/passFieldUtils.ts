@@ -5,10 +5,18 @@ export type PassField = {
   label: string
   value: string
   textAlignment?: 'PKTextAlignmentLeft' | 'PKTextAlignmentCenter' | 'PKTextAlignmentRight' | 'PKTextAlignmentNatural'
+  changeMessage?: string
 }
 
 export function txBackFields(txs: RecentTransaction[]): PassField[] {
   return txs.map((tx, i) => ({ key: `tx_${i}`, label: tx.label, value: tx.value }))
+}
+
+/** Devuelve un backField con el último mensaje de campaña, o array vacío si no hay. */
+export function campaignMessageBackField(passData: Record<string, unknown>): PassField[] {
+  const msg = passData.lastMessage as string | undefined
+  if (!msg) return []
+  return [{ key: 'campaign_msg', label: 'Último mensaje', value: msg, changeMessage: '%@' }]
 }
 
 /** Devuelve un backField con las reglas del negocio, o array vacío si no hay. */
