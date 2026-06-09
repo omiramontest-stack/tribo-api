@@ -1,43 +1,48 @@
-export interface SegmentAllOrg {
+interface SegmentBase {
+  /** Tokens de pases a excluir de la audiencia, independientemente del segmento. */
+  excludedPassTokens?: string[]
+}
+
+export interface SegmentAllOrg extends SegmentBase {
   type: 'all_org'
 }
 
-export interface SegmentAllWallet {
+export interface SegmentAllWallet extends SegmentBase {
   type: 'all_wallet'
   walletId: string
 }
 
-export interface SegmentNearCompletion {
+export interface SegmentNearCompletion extends SegmentBase {
   type: 'near_completion'
   walletId: string
   thresholdPercent: number
 }
 
-export interface SegmentInactive {
+export interface SegmentInactive extends SegmentBase {
   type: 'inactive'
   walletId?: string
   inactiveDays: number
 }
 
-export interface SegmentNeverRedeemed {
+export interface SegmentNeverRedeemed extends SegmentBase {
   type: 'never_redeemed'
   walletId?: string
 }
 
-export interface SegmentCashbackBalanceGte {
+export interface SegmentCashbackBalanceGte extends SegmentBase {
   type: 'cashback_balance_gte'
   walletId: string
   minBalance: number
 }
 
-export interface SegmentFrequentVisitors {
+export interface SegmentFrequentVisitors extends SegmentBase {
   type: 'frequent_visitors'
   walletId?: string
   minEvents: number
   withinDays?: number
 }
 
-export interface SegmentNewCustomers {
+export interface SegmentNewCustomers extends SegmentBase {
   type: 'new_customers'
   walletId?: string
   withinDays: number

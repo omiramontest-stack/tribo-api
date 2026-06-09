@@ -29,6 +29,13 @@ export class SegmentResolverService {
   constructor(private readonly _db: PrismaClient) {}
 
   async resolve(segment: Segment, organizationId: string): Promise<Pass[]> {
+    const passes = await this._resolveByType(segment, organizationId)
+    if (!segment.excludedPassTokens?.length) return passes
+    const excluded = new Set(segment.excludedPassTokens)
+    return passes.filter(p => !excluded.has(p.token))
+  }
+
+  private async _resolveByType(segment: Segment, organizationId: string): Promise<Pass[]> {
     switch (segment.type) {
       case 'all_org': {
         const rows = await this._db.$queryRaw<RawPass[]>`

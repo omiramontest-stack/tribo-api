@@ -27,6 +27,7 @@ const segmentSchema = z.object({
   minBalance: z.number().positive().optional(),
   minEvents: z.number().int().positive().optional(),
   withinDays: z.number().int().positive().optional(),
+  excludedPassTokens: z.array(z.string().uuid()).optional(),
 })
 
 const createSchema = z.object({
