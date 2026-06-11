@@ -2,7 +2,7 @@ import type { GeofenceRepository } from '../../../domain/wallet/repository/Geofe
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
-import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
+import type { Geofence, GeofenceWindow } from '../../../domain/wallet/entities/Geofence.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
@@ -17,6 +17,9 @@ export interface UpdateGeofenceDto {
   radiusMeters?: number
   message?: string
   isActive?: boolean
+  scheduleEnabled?: boolean
+  schedule?: GeofenceWindow[]
+  timezone?: string
 }
 
 export class UpdateGeofenceUseCase implements UseCase<UpdateGeofenceDto, Geofence> {
@@ -40,12 +43,15 @@ export class UpdateGeofenceUseCase implements UseCase<UpdateGeofenceDto, Geofenc
 
     const updated: Geofence = {
       ...existing,
-      label: dto.label ?? existing.label,
-      latitude: dto.latitude ?? existing.latitude,
-      longitude: dto.longitude ?? existing.longitude,
-      radiusMeters: dto.radiusMeters ?? existing.radiusMeters,
-      message: dto.message ?? existing.message,
-      isActive: dto.isActive ?? existing.isActive,
+      label:           dto.label           ?? existing.label,
+      latitude:        dto.latitude        ?? existing.latitude,
+      longitude:       dto.longitude       ?? existing.longitude,
+      radiusMeters:    dto.radiusMeters    ?? existing.radiusMeters,
+      message:         dto.message         ?? existing.message,
+      isActive:        dto.isActive        ?? existing.isActive,
+      scheduleEnabled: dto.scheduleEnabled ?? existing.scheduleEnabled,
+      schedule:        dto.schedule        ?? existing.schedule,
+      timezone:        dto.timezone        ?? existing.timezone,
     }
 
     const saved = await this._geofenceRepository.update(updated)

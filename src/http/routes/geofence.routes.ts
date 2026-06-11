@@ -6,21 +6,33 @@ import type { UpdateGeofenceUseCase } from '../../application/wallet/useCases/Up
 import type { DeleteGeofenceUseCase } from '../../application/wallet/useCases/DeleteGeofenceUseCase.js'
 import { authenticate, requireOrgContext } from '../middlewares/authenticate.js'
 
+const scheduleWindowSchema = z.object({
+  days: z.array(z.number().int().min(0).max(6)).min(1),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format HH:mm'),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format HH:mm'),
+}).refine(w => w.startTime < w.endTime, { message: 'endTime must be after startTime' })
+
 const createSchema = z.object({
   label: z.string().min(1).max(100),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  radiusMeters: z.number().int().min(100).max(5000).optional(),
+  radiusMeters: z.number().int().min(100).max(100).optional(),
   message: z.string().min(1).max(200),
+  scheduleEnabled: z.boolean().optional(),
+  schedule: z.array(scheduleWindowSchema).max(10).optional(),
+  timezone: z.string().min(1).optional(),
 })
 
 const updateSchema = z.object({
   label: z.string().min(1).max(100).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  radiusMeters: z.number().int().min(100).max(5000).optional(),
+  radiusMeters: z.number().int().min(100).max(100).optional(),
   message: z.string().min(1).max(200).optional(),
   isActive: z.boolean().optional(),
+  scheduleEnabled: z.boolean().optional(),
+  schedule: z.array(scheduleWindowSchema).max(10).optional(),
+  timezone: z.string().min(1).optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' })
 
 export function geofenceRoutes(

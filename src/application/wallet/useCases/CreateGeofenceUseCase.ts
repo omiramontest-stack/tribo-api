@@ -3,7 +3,7 @@ import type { GeofenceRepository } from '../../../domain/wallet/repository/Geofe
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
-import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
+import type { Geofence, GeofenceWindow } from '../../../domain/wallet/entities/Geofence.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
@@ -17,6 +17,9 @@ export interface CreateGeofenceDto {
   longitude: number
   radiusMeters?: number
   message: string
+  scheduleEnabled?: boolean
+  schedule?: GeofenceWindow[]
+  timezone?: string
 }
 
 export class CreateGeofenceUseCase implements UseCase<CreateGeofenceDto, Geofence> {
@@ -45,6 +48,9 @@ export class CreateGeofenceUseCase implements UseCase<CreateGeofenceDto, Geofenc
       radiusMeters: dto.radiusMeters ?? 100,
       message: dto.message,
       isActive: true,
+      scheduleEnabled: dto.scheduleEnabled ?? false,
+      schedule: dto.schedule ?? [],
+      timezone: dto.timezone ?? 'America/Mexico_City',
       createdAt: now,
       updatedAt: now,
     }

@@ -147,11 +147,16 @@ model Geofence {
   latitude     Float
   longitude    Float
   radiusMeters Int      @default(100)
-  message      String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  message         String
+  isActive        Boolean  @default(true)
+  scheduleEnabled Boolean  @default(false)
+  /** Array de GeofenceWindow — ventanas horarias en las que la geofence está activa. */
+  schedule        Json     @default("[]")
+  /** IANA timezone, e.g. "America/Mexico_City". */
+  timezone        String   @default("America/Mexico_City")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  wallet          Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([walletId, isActive])

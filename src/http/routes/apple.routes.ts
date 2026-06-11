@@ -10,6 +10,7 @@ import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { CashbackRules, GiftCardRules } from '../../domain/wallet/entities/WalletRules.js'
 import { generatePkPass, type RecentTransaction } from '../../infrastructure/apple/AppleWalletService.js'
 import { sendCampaignNotification } from '../../infrastructure/apple/ApnsService.js'
+import { isGeofenceCurrentlyActive } from '../../application/wallet/utils/geofenceSchedule.js'
 import { logger } from '../../infrastructure/logger/logger.js'
 import { generateGoogleWalletUrl } from '../../infrastructure/google/GoogleWalletService.js'
 import { isValidAdminRequest } from '../middlewares/authenticate.js'
@@ -142,10 +143,12 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send({ error: 'Wallet not found' })
 
-      const [recentTransactions, geofences] = await Promise.all([
+      const now = new Date()
+      const [recentTransactions, activeGeofences] = await Promise.all([
         buildRecentTransactions(db, pass, wallet),
         geofenceRepo.findActiveByWalletId(pass.walletId),
       ])
+      const geofences = activeGeofences.filter(g => isGeofenceCurrentlyActive(g, now))
       const buffer = await generatePkPass(wallet, pass, recentTransactions, geofences)
 
       if (dlToken) await redeemDownloadToken.run(dlToken)
@@ -316,10 +319,12 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send()
 
-      const [recentTransactions, geofences] = await Promise.all([
+      const now = new Date()
+      const [recentTransactions, activeGeofences] = await Promise.all([
         buildRecentTransactions(db, pass, wallet),
         geofenceRepo.findActiveByWalletId(pass.walletId),
       ])
+      const geofences = activeGeofences.filter(g => isGeofenceCurrentlyActive(g, now))
       const buffer = await generatePkPass(wallet, pass, recentTransactions, geofences)
 
       reply

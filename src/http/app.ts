@@ -99,6 +99,7 @@ import { GetCampaignByIdUseCase } from '../application/campaign/useCases/GetCamp
 import { GetCampaignStatsUseCase } from '../application/campaign/useCases/GetCampaignStatsUseCase.js'
 import { ProcessCampaignsUseCase } from '../application/campaign/useCases/ProcessCampaignsUseCase.js'
 import { CampaignWorker, type IWorker } from '../infrastructure/campaign/worker/CampaignWorker.js'
+import { GeofenceWorker } from '../infrastructure/wallet/worker/GeofenceWorker.js'
 import { campaignRoutes } from './routes/campaign.routes.js'
 
 // Billing
@@ -233,6 +234,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getCampaignStats = new GetCampaignStatsUseCase(campaignRepo, orgRepo)
   const processCampaigns = new ProcessCampaignsUseCase(campaignRepo, campaignSender, billingRepo)
   const worker = new CampaignWorker(processCampaigns)
+  const geofenceWorker = new GeofenceWorker(geofenceRepo, passRepo)
+  geofenceWorker.start()
 
   // Billing
   const stripeService = new StripeService()

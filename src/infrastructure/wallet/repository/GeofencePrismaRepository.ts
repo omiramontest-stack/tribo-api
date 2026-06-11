@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import type { GeofenceRepository } from '../../../domain/wallet/repository/GeofenceRepository.js'
-import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
+import type { Geofence, GeofenceWindow } from '../../../domain/wallet/entities/Geofence.js'
 
 type GeofenceRow = Awaited<ReturnType<PrismaClient['geofence']['findUniqueOrThrow']>>
 
@@ -19,6 +19,13 @@ export class GeofencePrismaRepository implements GeofenceRepository {
     const rows = await this._db.geofence.findMany({
       where: { walletId, isActive: true },
       orderBy: { createdAt: 'asc' },
+    })
+    return rows.map(this._toEntity)
+  }
+
+  async findAllScheduled(): Promise<Geofence[]> {
+    const rows = await this._db.geofence.findMany({
+      where: { scheduleEnabled: true, isActive: true },
     })
     return rows.map(this._toEntity)
   }
@@ -43,6 +50,9 @@ export class GeofencePrismaRepository implements GeofenceRepository {
         radiusMeters: geofence.radiusMeters,
         message: geofence.message,
         isActive: geofence.isActive,
+        scheduleEnabled: geofence.scheduleEnabled,
+        schedule: geofence.schedule as object[],
+        timezone: geofence.timezone,
       },
     })
     return this._toEntity(row)
@@ -58,6 +68,9 @@ export class GeofencePrismaRepository implements GeofenceRepository {
         radiusMeters: geofence.radiusMeters,
         message: geofence.message,
         isActive: geofence.isActive,
+        scheduleEnabled: geofence.scheduleEnabled,
+        schedule: geofence.schedule as object[],
+        timezone: geofence.timezone,
       },
     })
     return this._toEntity(row)
@@ -77,6 +90,9 @@ export class GeofencePrismaRepository implements GeofenceRepository {
       radiusMeters: row.radiusMeters,
       message: row.message,
       isActive: row.isActive,
+      scheduleEnabled: row.scheduleEnabled,
+      schedule: (row.schedule as unknown as GeofenceWindow[]) ?? [],
+      timezone: row.timezone,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
