@@ -17,8 +17,6 @@ export interface CreateGeofenceDto {
   longitude: number
   radiusMeters?: number
   message: string
-  /** Máximo de geofences permitido por el plan del negocio. */
-  geofencesLimit: number
 }
 
 export class CreateGeofenceUseCase implements UseCase<CreateGeofenceDto, Geofence> {
@@ -36,15 +34,6 @@ export class CreateGeofenceUseCase implements UseCase<CreateGeofenceDto, Geofenc
     const wallet = await this._walletRepository.findById(dto.walletId)
     if (!wallet) throw new AppError('WALLET_NOT_FOUND', 'Wallet not found', 404)
     if (wallet.organizationId !== dto.organizationId) throw new AppError('FORBIDDEN', 'Forbidden', 403)
-
-    const currentCount = await this._geofenceRepository.countByWalletId(dto.walletId)
-    if (currentCount >= dto.geofencesLimit) {
-      throw new AppError(
-        'GEOFENCE_LIMIT_REACHED',
-        `Your plan allows up to ${dto.geofencesLimit} geofence${dto.geofencesLimit === 1 ? '' : 's'} per wallet`,
-        403,
-      )
-    }
 
     const now = new Date().toISOString()
     const geofence: Geofence = {

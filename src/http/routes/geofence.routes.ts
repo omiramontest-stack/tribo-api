@@ -4,7 +4,6 @@ import type { GetGeofencesUseCase } from '../../application/wallet/useCases/GetG
 import type { CreateGeofenceUseCase } from '../../application/wallet/useCases/CreateGeofenceUseCase.js'
 import type { UpdateGeofenceUseCase } from '../../application/wallet/useCases/UpdateGeofenceUseCase.js'
 import type { DeleteGeofenceUseCase } from '../../application/wallet/useCases/DeleteGeofenceUseCase.js'
-import type { PlanGuard } from '../middlewares/checkPlan.js'
 import { authenticate, requireOrgContext } from '../middlewares/authenticate.js'
 
 const createSchema = z.object({
@@ -29,7 +28,6 @@ export function geofenceRoutes(
   createGeofence: CreateGeofenceUseCase,
   updateGeofence: UpdateGeofenceUseCase,
   deleteGeofence: DeleteGeofenceUseCase,
-  planGuard: PlanGuard,
 ) {
   return async (app: FastifyInstance) => {
     app.addHook('preHandler', authenticate)
@@ -50,14 +48,6 @@ export function geofenceRoutes(
       const { orgId, walletId } = request.params as { orgId: string; walletId: string }
       if (orgId !== request.admin.organizationId) return reply.code(403).send({ error: 'Forbidden' })
 
-      const { allowed, limit } = await planGuard.checkGeofenceLimit(request.admin.organizationId!)
-      if (!allowed) {
-        return reply.code(403).send({
-          error: 'PLAN_UPGRADE_REQUIRED',
-          message: 'Your plan does not include location-based notifications',
-        })
-      }
-
       const body = createSchema.safeParse(request.body)
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })
 
@@ -67,7 +57,6 @@ export function geofenceRoutes(
           walletId,
           organizationId: request.admin.organizationId!,
           adminId: request.admin.adminId,
-          geofencesLimit: limit,
         }),
       )
     })
@@ -75,14 +64,6 @@ export function geofenceRoutes(
     app.patch('/organizations/:orgId/wallets/:walletId/geofences/:id', async (request, reply) => {
       const { orgId, id } = request.params as { orgId: string; walletId: string; id: string }
       if (orgId !== request.admin.organizationId) return reply.code(403).send({ error: 'Forbidden' })
-
-      const { allowed } = await planGuard.checkGeofenceLimit(request.admin.organizationId!)
-      if (!allowed) {
-        return reply.code(403).send({
-          error: 'PLAN_UPGRADE_REQUIRED',
-          message: 'Your plan does not include location-based notifications',
-        })
-      }
 
       const body = updateSchema.safeParse(request.body)
       if (!body.success) return reply.code(400).send({ error: 'Invalid input', details: body.error.flatten() })

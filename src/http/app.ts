@@ -246,7 +246,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo, createSessionCode, exchangeSessionCode))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember, createOrganization))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
-  app.register(geofenceRoutes(getGeofences, createGeofence, updateGeofence, deleteGeofence, planGuard))
+  app.register(geofenceRoutes(getGeofences, createGeofence, updateGeofence, deleteGeofence))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp, renewPass, unarchivePass))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
   app.register(appleRoutes(prisma, passRepo, walletRepo, geofenceRepo, validateDownloadToken, redeemDownloadToken))
