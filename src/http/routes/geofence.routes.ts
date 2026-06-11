@@ -16,7 +16,7 @@ const createSchema = z.object({
   label: z.string().min(1).max(100),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  radiusMeters: z.number().int().min(100).max(100).optional(),
+  radiusMeters: z.number().int().min(10).max(100).optional(),
   message: z.string().min(1).max(200),
   scheduleEnabled: z.boolean().optional(),
   schedule: z.array(scheduleWindowSchema).max(10).optional(),

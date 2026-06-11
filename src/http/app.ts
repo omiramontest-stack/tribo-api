@@ -234,7 +234,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getCampaignStats = new GetCampaignStatsUseCase(campaignRepo, orgRepo)
   const processCampaigns = new ProcessCampaignsUseCase(campaignRepo, campaignSender, billingRepo)
   const worker = new CampaignWorker(processCampaigns)
-  const geofenceWorker = new GeofenceWorker(geofenceRepo, passRepo)
+  const geofenceWorker = new GeofenceWorker(geofenceRepo, walletRepo, passRepo, prisma)
   geofenceWorker.start()
 
   // Billing

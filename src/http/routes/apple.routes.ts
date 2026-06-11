@@ -174,7 +174,11 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send({ error: 'Wallet not found' })
 
-      const url = await generateGoogleWalletUrl(wallet, pass)
+      const now = new Date()
+      const activeGeofences = await geofenceRepo.findActiveByWalletId(pass.walletId)
+      const geofences = activeGeofences.filter(g => isGeofenceCurrentlyActive(g, now))
+
+      const url = await generateGoogleWalletUrl(wallet, pass, geofences)
 
       if (dlToken) await redeemDownloadToken.run(dlToken)
 

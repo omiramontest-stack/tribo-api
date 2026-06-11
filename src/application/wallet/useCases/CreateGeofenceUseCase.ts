@@ -7,6 +7,7 @@ import type { Geofence, GeofenceWindow } from '../../../domain/wallet/entities/G
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
+import { updateGoogleWalletClass } from '../../../infrastructure/google/GoogleWalletService.js'
 
 export interface CreateGeofenceDto {
   walletId: string
@@ -57,14 +58,27 @@ export class CreateGeofenceUseCase implements UseCase<CreateGeofenceDto, Geofenc
 
     const saved = await this._geofenceRepository.save(geofence)
 
-    this._propagateToDevices(dto.walletId).catch(() => {})
+    const [updatedWallet, allGeofences] = await Promise.all([
+      this._walletRepository.findById(dto.walletId),
+      this._geofenceRepository.findActiveByWalletId(dto.walletId),
+    ])
+
+    this._propagateToDevices(dto.walletId, updatedWallet ? { wallet: updatedWallet, geofences: allGeofences } : null).catch(() => {})
 
     return saved
   }
 
-  private async _propagateToDevices(walletId: string): Promise<void> {
+  private async _propagateToDevices(
+    walletId: string,
+    google: { wallet: import('../../../domain/wallet/entities/Wallet.js').Wallet; geofences: Geofence[] } | null,
+  ): Promise<void> {
     await this._passRepository.touchAllByWalletId(walletId)
-    const pushTokens = await this._passRepository.findAllPushTokensByWalletId(walletId)
+
+    const [pushTokens] = await Promise.all([
+      this._passRepository.findAllPushTokensByWalletId(walletId),
+      google ? updateGoogleWalletClass(google.wallet, google.geofences) : Promise.resolve(),
+    ])
+
     if (pushTokens.length > 0) await sendPassUpdateNotification(pushTokens)
   }
 }

@@ -4,12 +4,16 @@ import jwt from 'jsonwebtoken'
 import { logger } from '../logger/logger.js'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
+import type { Geofence } from '../../domain/wallet/entities/Geofence.js'
 import type { StampsData, MembershipData, PointsData, CashbackData, DaypassData, BundleData, GiftCardData, CouponData } from '../../domain/pass/entities/PassData.js'
 import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules, BundleRules, GiftCardRules, CouponRules } from '../../domain/wallet/entities/WalletRules.js'
 
 const ISSUER_ID = process.env.GOOGLE_WALLET_ISSUER_ID!
 const API_URL = process.env.API_URL!
 const BASE_URL = 'https://walletobjects.googleapis.com/walletobjects/v1'
+
+/** Google Wallet soporta hasta 10 locations por clase. */
+const GOOGLE_MAX_LOCATIONS = 10
 
 let _credentials: ReturnType<typeof JSON.parse> | null = null
 function getCredentials() {
@@ -40,7 +44,14 @@ function buildObjectId(passToken: string) {
   return `${ISSUER_ID}.pass_${sanitizeId(passToken)}`
 }
 
-function buildLoyaltyClass(wallet: Wallet) {
+function buildGoogleLocations(geofences: Geofence[]) {
+  return geofences.slice(0, GOOGLE_MAX_LOCATIONS).map(g => ({
+    latitude: g.latitude,
+    longitude: g.longitude,
+  }))
+}
+
+function buildLoyaltyClass(wallet: Wallet, geofences: Geofence[] = []) {
   const classId = buildClassId(wallet.id)
   const rules = wallet.rules
 
@@ -75,6 +86,7 @@ function buildLoyaltyClass(wallet: Wallet) {
       uris: [{ uri: `${API_URL}/w/`, description: 'Ver mi tarjeta', id: 'wallet_link' }],
     },
     ...(textModulesData.length > 0 ? { textModulesData } : {}),
+    ...(geofences.length > 0 ? { locations: buildGoogleLocations(geofences) } : {}),
   }
 }
 
@@ -164,10 +176,11 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
   }
 }
 
-async function ensureClassExists(wallet: Wallet): Promise<void> {
+async function ensureClassExists(wallet: Wallet, geofences: Geofence[] = []): Promise<void> {
   const auth = getAuth()
   const client = await auth.getClient()
   const classId = buildClassId(wallet.id)
+  const classBody = buildLoyaltyClass(wallet, geofences)
 
   logger.debug({ classId }, '[GoogleWallet] ensureClassExists')
 
@@ -187,7 +200,7 @@ async function ensureClassExists(wallet: Wallet): Promise<void> {
   if (!classExists) {
     logger.debug({ classId }, '[GoogleWallet] class not found, creating')
     try {
-      await client.request({ url: `${BASE_URL}/loyaltyClass`, method: 'POST', data: buildLoyaltyClass(wallet) })
+      await client.request({ url: `${BASE_URL}/loyaltyClass`, method: 'POST', data: classBody })
       logger.debug({ classId }, '[GoogleWallet] class created OK')
     } catch (e) {
       const body = (e as { response?: { data?: unknown } }).response?.data
@@ -197,7 +210,7 @@ async function ensureClassExists(wallet: Wallet): Promise<void> {
   } else {
     logger.debug({ classId }, '[GoogleWallet] class exists, updating')
     try {
-      await client.request({ url: `${BASE_URL}/loyaltyClass/${classId}`, method: 'PUT', data: buildLoyaltyClass(wallet) })
+      await client.request({ url: `${BASE_URL}/loyaltyClass/${classId}`, method: 'PUT', data: classBody })
       logger.debug({ classId }, '[GoogleWallet] class updated OK')
     } catch (e) {
       const body = (e as { response?: { data?: unknown } }).response?.data
@@ -207,10 +220,18 @@ async function ensureClassExists(wallet: Wallet): Promise<void> {
   }
 }
 
-export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass): Promise<string> {
+/** Actualiza solo las locations del LoyaltyClass sin tocar los objetos individuales.
+ *  Llamar cuando cambian las geofences de un wallet. */
+export async function updateGoogleWalletClass(wallet: Wallet, geofences: Geofence[]): Promise<void> {
+  await ensureClassExists(wallet, geofences).catch(e => {
+    logger.error({ walletId: wallet.id, err: (e as Error).message }, '[GoogleWallet] updateGoogleWalletClass error')
+  })
+}
+
+export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass, geofences: Geofence[] = []): Promise<string> {
   logger.debug({ walletId: wallet.id, passToken: pass.token, issuerId: ISSUER_ID }, '[GoogleWallet] generateGoogleWalletUrl')
 
-  await ensureClassExists(wallet)
+  await ensureClassExists(wallet, geofences)
 
   const credentials = getCredentials()
   const loyaltyObject = buildLoyaltyObject(wallet, pass)

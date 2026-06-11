@@ -5,6 +5,7 @@ import type { PassRepository } from '../../../domain/pass/repository/PassReposit
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
+import { updateGoogleWalletClass } from '../../../infrastructure/google/GoogleWalletService.js'
 
 export interface DeleteGeofenceDto {
   id: string
@@ -33,12 +34,24 @@ export class DeleteGeofenceUseCase implements UseCase<DeleteGeofenceDto, void> {
 
     await this._geofenceRepository.delete(dto.id)
 
-    this._propagateToDevices(geofence.walletId).catch(() => {})
+    const [allGeofences] = await Promise.all([
+      this._geofenceRepository.findActiveByWalletId(geofence.walletId),
+    ])
+
+    this._propagateToDevices(geofence.walletId, { wallet, geofences: allGeofences }).catch(() => {})
   }
 
-  private async _propagateToDevices(walletId: string): Promise<void> {
+  private async _propagateToDevices(
+    walletId: string,
+    google: { wallet: import('../../../domain/wallet/entities/Wallet.js').Wallet; geofences: import('../../../domain/wallet/entities/Geofence.js').Geofence[] },
+  ): Promise<void> {
     await this._passRepository.touchAllByWalletId(walletId)
-    const pushTokens = await this._passRepository.findAllPushTokensByWalletId(walletId)
+
+    const [pushTokens] = await Promise.all([
+      this._passRepository.findAllPushTokensByWalletId(walletId),
+      updateGoogleWalletClass(google.wallet, google.geofences),
+    ])
+
     if (pushTokens.length > 0) await sendPassUpdateNotification(pushTokens)
   }
 }
