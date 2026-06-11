@@ -27,7 +27,7 @@ const updateSchema = z.object({
   label: z.string().min(1).max(100).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  radiusMeters: z.number().int().min(100).max(100).optional(),
+  radiusMeters: z.number().int().min(10).max(100).optional(),
   message: z.string().min(1).max(200).optional(),
   isActive: z.boolean().optional(),
   scheduleEnabled: z.boolean().optional(),
