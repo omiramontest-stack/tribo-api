@@ -316,8 +316,11 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send()
 
-      const recentTransactions = await buildRecentTransactions(db, pass, wallet)
-      const buffer = await generatePkPass(wallet, pass, recentTransactions)
+      const [recentTransactions, geofences] = await Promise.all([
+        buildRecentTransactions(db, pass, wallet),
+        geofenceRepo.findActiveByWalletId(pass.walletId),
+      ])
+      const buffer = await generatePkPass(wallet, pass, recentTransactions, geofences)
 
       reply
         .header('Content-Type', 'application/vnd.apple.pkpass')
