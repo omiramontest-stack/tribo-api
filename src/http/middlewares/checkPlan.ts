@@ -126,7 +126,13 @@ export function createPlanGuard(billingRepo: BillingRepository) {
     return planAllows(plan, feature)
   }
 
-  return { requireSubscription, requireFeature, checkWalletLimit, checkPassLimit, checkFeatureAllowed }
+  async function checkGeofenceLimit(organizationId: string): Promise<{ allowed: boolean; limit: number }> {
+    const plan = await getActivePlan(organizationId)
+    if (!plan) return { allowed: false, limit: 0 }
+    return { allowed: plan.geofencesPerWallet > 0, limit: plan.geofencesPerWallet }
+  }
+
+  return { requireSubscription, requireFeature, checkWalletLimit, checkPassLimit, checkFeatureAllowed, checkGeofenceLimit }
 }
 
 export type PlanGuard = ReturnType<typeof createPlanGuard>

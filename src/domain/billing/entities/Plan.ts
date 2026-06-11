@@ -13,6 +13,7 @@ export interface Plan {
   emailCampaigns: boolean
   smsCampaigns: boolean
   analyticsLevel: AnalyticsLevel
+  geofencesPerWallet: number
   isActive: boolean
   createdAt: string
   updatedAt: string

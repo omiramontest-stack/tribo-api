@@ -2,12 +2,13 @@ import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { CashbackData } from '../../../domain/pass/entities/PassData.js'
 import type { CashbackRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { txBackFields, businessRulesBackField, campaignMessageBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class CashbackPassBuilder implements PassBuilder {
-  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
-    const base  = buildBasePassJson(wallet, pass)
+  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[], geofences?: Geofence[]): object {
+    const base  = buildBasePassJson(wallet, pass, geofences)
     const rules = wallet.rules as CashbackRules
     const data  = pass.data   as CashbackData
 

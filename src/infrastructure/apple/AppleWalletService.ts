@@ -3,6 +3,7 @@ import { PKPass } from 'passkit-generator'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
 import type { WalletType } from '../../domain/wallet/entities/Wallet.js'
+import type { Geofence } from '../../domain/wallet/entities/Geofence.js'
 import type { PassBuilder } from './builders/PassBuilder.js'
 import { StampsPassBuilder } from './builders/StampsPassBuilder.js'
 import { MembershipPassBuilder } from './builders/MembershipPassBuilder.js'
@@ -39,6 +40,7 @@ export async function generatePkPass(
   wallet: Wallet,
   pass: Pass,
   recentTransactions: RecentTransaction[] = [],
+  geofences: Geofence[] = [],
 ): Promise<Buffer> {
   const builder = builders[wallet.rules.type]
   if (!builder) throw new Error(`No builder registered for wallet type: ${wallet.rules.type}`)
@@ -51,7 +53,7 @@ export async function generatePkPass(
   }
 
   const [passJson, extraAssets] = await Promise.all([
-    builder.buildJson(safeWallet, pass, recentTransactions),
+    builder.buildJson(safeWallet, pass, recentTransactions, geofences),
     builder.buildAssets(safeWallet, pass),
   ])
 

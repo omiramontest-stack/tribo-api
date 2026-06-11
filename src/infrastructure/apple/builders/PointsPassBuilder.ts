@@ -2,6 +2,7 @@ import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { PointsData } from '../../../domain/pass/entities/PassData.js'
 import type { PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import type { StripGenerator } from '../assets/StripGenerator.js'
 import { txBackFields, businessRulesBackField, campaignMessageBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
@@ -9,8 +10,8 @@ import { txBackFields, businessRulesBackField, campaignMessageBackField, fullNam
 export class PointsPassBuilder implements PassBuilder {
   constructor(private readonly stripGenerator: StripGenerator) {}
 
-  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
-    const base      = buildBasePassJson(wallet, pass)
+  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[], geofences?: Geofence[]): object {
+    const base      = buildBasePassJson(wallet, pass, geofences)
     const rules     = wallet.rules as PointsRules
     const data      = pass.data   as PointsData
     const remaining = Math.max(0, rules.rewardThreshold - data.currentPoints)

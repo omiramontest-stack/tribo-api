@@ -5,6 +5,7 @@ import { AppError } from '../application/common/AppError.js'
 
 // Repositories
 import { WalletPrismaRepository } from '../infrastructure/wallet/repository/WalletPrismaRepository.js'
+import { GeofencePrismaRepository } from '../infrastructure/wallet/repository/GeofencePrismaRepository.js'
 import { PassPrismaRepository } from '../infrastructure/pass/repository/PassPrismaRepository.js'
 import { PassDownloadTokenPrismaRepository } from '../infrastructure/pass/repository/PassDownloadTokenPrismaRepository.js'
 import { AuthPrismaRepository } from '../infrastructure/auth/repository/AuthPrismaRepository.js'
@@ -44,6 +45,10 @@ import { GetWalletsUseCase } from '../application/wallet/useCases/GetWalletsUseC
 import { GetWalletByIdUseCase } from '../application/wallet/useCases/GetWalletByIdUseCase.js'
 import { DeleteWalletUseCase } from '../application/wallet/useCases/DeleteWalletUseCase.js'
 import { UpdateWalletUseCase } from '../application/wallet/useCases/UpdateWalletUseCase.js'
+import { GetGeofencesUseCase } from '../application/wallet/useCases/GetGeofencesUseCase.js'
+import { CreateGeofenceUseCase } from '../application/wallet/useCases/CreateGeofenceUseCase.js'
+import { UpdateGeofenceUseCase } from '../application/wallet/useCases/UpdateGeofenceUseCase.js'
+import { DeleteGeofenceUseCase } from '../application/wallet/useCases/DeleteGeofenceUseCase.js'
 
 // Use cases — pass
 import { GeneratePassUseCase } from '../application/pass/useCases/GeneratePassUseCase.js'
@@ -116,6 +121,7 @@ import traceIdPlugin from './plugins/traceId.js'
 import { authRoutes } from './routes/auth.routes.js'
 import { organizationRoutes } from './routes/organization.routes.js'
 import { walletRoutes } from './routes/wallet.routes.js'
+import { geofenceRoutes } from './routes/geofence.routes.js'
 import { passRoutes } from './routes/pass.routes.js'
 import { appleRoutes } from './routes/apple.routes.js'
 import { analyticsRoutes } from './routes/analytics.routes.js'
@@ -131,6 +137,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
 
   // Repositories
   const walletRepo = new WalletPrismaRepository(prisma)
+  const geofenceRepo = new GeofencePrismaRepository(prisma)
   const passRepo = new PassPrismaRepository(prisma)
   const passDownloadTokenRepo = new PassDownloadTokenPrismaRepository(prisma)
   const authRepo = new AuthPrismaRepository(prisma)
@@ -176,6 +183,12 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getWalletById = new GetWalletByIdUseCase(walletRepo, orgRepo)
   const deleteWallet = new DeleteWalletUseCase(walletRepo, passRepo, orgRepo)
   const updateWallet = new UpdateWalletUseCase(walletRepo, passRepo, orgRepo)
+
+  // Geofence use cases
+  const getGeofences = new GetGeofencesUseCase(geofenceRepo, walletRepo, orgRepo)
+  const createGeofence = new CreateGeofenceUseCase(geofenceRepo, walletRepo, passRepo, orgRepo)
+  const updateGeofence = new UpdateGeofenceUseCase(geofenceRepo, walletRepo, passRepo, orgRepo)
+  const deleteGeofence = new DeleteGeofenceUseCase(geofenceRepo, walletRepo, passRepo, orgRepo)
 
   // Pass use cases
   const generatePass = new GeneratePassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
@@ -233,9 +246,10 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo, createSessionCode, exchangeSessionCode))
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember, createOrganization))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
+  app.register(geofenceRoutes(getGeofences, createGeofence, updateGeofence, deleteGeofence, planGuard))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp, renewPass, unarchivePass))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
-  app.register(appleRoutes(prisma, passRepo, walletRepo, validateDownloadToken, redeemDownloadToken))
+  app.register(appleRoutes(prisma, passRepo, walletRepo, geofenceRepo, validateDownloadToken, redeemDownloadToken))
   app.register(analyticsRoutes(getOrgAnalytics, getWalletAnalytics))
   app.register(campaignRoutes(createCampaign, previewAudience, scheduleCampaign, cancelCampaign, getCampaigns, getCampaignById, getCampaignStats, planGuard))
   app.register(billingRoutes(getBillingStatus, createCheckout, buyCredits, handleWebhook, billingRepo, stripeService))

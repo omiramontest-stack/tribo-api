@@ -1,5 +1,6 @@
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
+import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
 import type { RecentTransaction } from '../utils/passFieldUtils.js'
 import { hexToRgb } from '../utils/colorUtils.js'
 
@@ -9,7 +10,18 @@ const API_URL = process.env.API_URL!
 const PASS_TYPE_ID = process.env.APPLE_PASS_TYPE_ID!
 const TEAM_ID = process.env.APPLE_TEAM_ID!
 
-export function buildBasePassJson(wallet: Wallet, pass: Pass) {
+/** Apple Wallet soporta hasta 10 locations por pase. */
+const APPLE_MAX_LOCATIONS = 10
+
+export function buildBasePassJson(wallet: Wallet, pass: Pass, geofences: Geofence[] = []) {
+  const activeGeofences = geofences.filter(g => g.isActive).slice(0, APPLE_MAX_LOCATIONS)
+
+  const locations = activeGeofences.map(g => ({
+    latitude: g.latitude,
+    longitude: g.longitude,
+    relevantText: g.message,
+  }))
+
   return {
     formatVersion: 1,
     passTypeIdentifier: PASS_TYPE_ID,
@@ -29,10 +41,11 @@ export function buildBasePassJson(wallet: Wallet, pass: Pass) {
         messageEncoding: 'iso-8859-1',
       },
     ],
+    ...(locations.length > 0 && { locations }),
   }
 }
 
 export interface PassBuilder {
-  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object
+  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[], geofences?: Geofence[]): object
   buildAssets(wallet: Wallet, pass: Pass): Promise<Record<string, Buffer>>
 }

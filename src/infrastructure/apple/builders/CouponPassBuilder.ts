@@ -2,13 +2,14 @@ import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { CouponData } from '../../../domain/pass/entities/PassData.js'
 import type { CouponRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { buildGradientStripSet } from '../assets/GradientStripGenerator.js'
-import { fullName, formatDate, businessRulesBackField, campaignMessageBackField } from '../utils/passFieldUtils.js'
+import { fullName, formatDate, businessRulesBackField, campaignMessageBackField, type RecentTransaction } from '../utils/passFieldUtils.js'
 
 export class CouponPassBuilder implements PassBuilder {
-  buildJson(wallet: Wallet, pass: Pass): object {
-    const base = buildBasePassJson(wallet, pass)
+  buildJson(wallet: Wallet, pass: Pass, _txs: RecentTransaction[], geofences?: Geofence[]): object {
+    const base = buildBasePassJson(wallet, pass, geofences)
     const rules = wallet.rules as CouponRules
     const data = pass.data as CouponData
 

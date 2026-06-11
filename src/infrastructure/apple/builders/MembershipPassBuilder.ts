@@ -2,13 +2,14 @@ import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { MembershipData } from '../../../domain/pass/entities/PassData.js'
 import type { MembershipRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
 import { buildBasePassJson, type PassBuilder } from './PassBuilder.js'
 import { txBackFields, businessRulesBackField, campaignMessageBackField, fullName, formatDate, type RecentTransaction } from '../utils/passFieldUtils.js'
 import { fetchImageBuffer } from '../utils/imageUtils.js'
 
 export class MembershipPassBuilder implements PassBuilder {
-  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[]): object {
-    const base = buildBasePassJson(wallet, pass)
+  buildJson(wallet: Wallet, pass: Pass, txs: RecentTransaction[], geofences?: Geofence[]): object {
+    const base = buildBasePassJson(wallet, pass, geofences)
     const rules = wallet.rules as MembershipRules
     const data = pass.data as MembershipData
 

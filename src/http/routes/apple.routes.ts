@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PassRepository } from '../../domain/pass/repository/PassRepository.js'
 import type { WalletRepository } from '../../domain/wallet/repository/WalletRepository.js'
+import type { GeofenceRepository } from '../../domain/wallet/repository/GeofenceRepository.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import type { RedeemDownloadTokenUseCase } from '../../application/pass/useCases/RedeemDownloadTokenUseCase.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
@@ -119,6 +120,7 @@ export function appleRoutes(
   db: PrismaClient,
   passRepo: PassRepository,
   walletRepo: WalletRepository,
+  geofenceRepo: GeofenceRepository,
   validateDownloadToken: ValidateDownloadTokenUseCase,
   redeemDownloadToken: RedeemDownloadTokenUseCase,
 ) {
@@ -140,8 +142,11 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send({ error: 'Wallet not found' })
 
-      const recentTransactions = await buildRecentTransactions(db, pass, wallet)
-      const buffer = await generatePkPass(wallet, pass, recentTransactions)
+      const [recentTransactions, geofences] = await Promise.all([
+        buildRecentTransactions(db, pass, wallet),
+        geofenceRepo.findActiveByWalletId(pass.walletId),
+      ])
+      const buffer = await generatePkPass(wallet, pass, recentTransactions, geofences)
 
       if (dlToken) await redeemDownloadToken.run(dlToken)
 
