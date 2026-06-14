@@ -212,7 +212,7 @@ ${image ? `<meta property="og:image" content="${image}">` : ''}
 
     app.post('/passes/:token/renew', { preHandler: [authenticate, requireOrgContext] }, async (request, reply) => {
       const { token } = request.params as { token: string }
-      reply.code(201).send(await renewPass.run({
+      reply.code(200).send(await renewPass.run({
         token,
         adminId: request.admin.adminId,
         organizationId: request.admin.organizationId!,

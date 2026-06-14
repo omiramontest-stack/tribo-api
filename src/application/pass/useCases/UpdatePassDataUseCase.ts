@@ -137,11 +137,14 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
   private applyAddStamp(data: StampsData, rules: StampsRules): ActionResult {
     const newStamps = Math.min(data.currentStamps + 1, rules.totalStamps)
     const isComplete = newStamps >= rules.totalStamps
+    // Al completar (8/8) solo marcamos el pase como `completed`; la redención
+    // (stamp_redeemed) se contabiliza cuando el negocio reclama y reinicia el
+    // pase vía /renew, para que el evento refleje el premio realmente entregado.
     return {
       updatedData: { ...data, currentStamps: newStamps },
       newStatus: isComplete ? 'completed' : undefined,
-      eventType: isComplete ? 'stamp_redeemed' : 'stamp_added',
-      eventMetadata: { currentStamps: newStamps, totalStamps: rules.totalStamps },
+      eventType: 'stamp_added',
+      eventMetadata: { currentStamps: newStamps, totalStamps: rules.totalStamps, completed: isComplete },
     }
   }
 

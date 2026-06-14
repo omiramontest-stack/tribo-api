@@ -8,6 +8,7 @@ import type { RenewPassDto } from '../dto/RenewPassDto.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { StampsRules, BundleRules, PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import type { PassData } from '../../../domain/pass/entities/PassData.js'
+import type { PassEventType } from '../../../domain/analytics/entities/PassEvent.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
 import { updateGoogleWalletObject } from '../../../infrastructure/google/GoogleWalletService.js'
@@ -17,6 +18,15 @@ type RenewableType = typeof RENEWABLE_TYPES[number]
 
 function isRenewable(type: string): type is RenewableType {
   return (RENEWABLE_TYPES as readonly string[]).includes(type)
+}
+
+// Evento de redención que se contabiliza al reclamar el premio y reiniciar el ciclo.
+// `bundle` no emite redención aquí: cada uso (use_bundle) ya se contabilizó durante
+// el ciclo, por lo que el reinicio es solo una recarga del paquete.
+const REDEEM_EVENT: Record<RenewableType, PassEventType | null> = {
+  stamps: 'stamp_redeemed',
+  points: 'points_redeemed',
+  bundle: null,
 }
 
 function buildResetData(type: RenewableType, wallet: Awaited<ReturnType<WalletRepository['findById']>> & object): PassData {
@@ -47,16 +57,16 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
   ) {}
 
   async run(dto: RenewPassDto): Promise<Pass> {
-    const oldPass = await this._passRepository.findByToken(dto.token)
-    if (!oldPass) throw new AppError('PASS_NOT_FOUND', 'Pass not found', 404)
+    const pass = await this._passRepository.findByToken(dto.token)
+    if (!pass) throw new AppError('PASS_NOT_FOUND', 'Pass not found', 404)
 
-    if (oldPass.status !== 'completed')
+    if (pass.status !== 'completed')
       throw new AppError('PASS_NOT_COMPLETED', 'Only completed passes can be renewed', 400)
 
-    if (!isRenewable(oldPass.data.type))
-      throw new AppError('UNSUPPORTED_TYPE', `Pass type '${oldPass.data.type}' does not support renewal`, 400)
+    if (!isRenewable(pass.data.type))
+      throw new AppError('UNSUPPORTED_TYPE', `Pass type '${pass.data.type}' does not support renewal`, 400)
 
-    const wallet = await this._walletRepository.findById(oldPass.walletId)
+    const wallet = await this._walletRepository.findById(pass.walletId)
     if (!wallet) throw new AppError('WALLET_NOT_FOUND', 'Wallet not found', 404)
 
     if (wallet.organizationId !== dto.organizationId)
@@ -66,45 +76,33 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
     if (!isMember)
       throw new AppError('FORBIDDEN', 'This pass does not belong to your organization', 403)
 
+    // Reinicio in-place: conservamos id/token/authToken para que el pase YA instalado
+    // (Apple/Google) se actualice por push, sin obligar al cliente a re-descargarlo.
+    const type = pass.data.type as RenewableType
+    pass.data = buildResetData(type, wallet)
+    pass.status = 'active'
+
+    const saved = await this._passRepository.update(pass)
+
     const now = new Date().toISOString()
-    const newPass: Pass = {
-      id: randomUUID(),
-      walletId: oldPass.walletId,
-      token: randomUUID(),
-      authToken: randomUUID(),
-      firstName: oldPass.firstName,
-      lastName: oldPass.lastName,
-      phone: oldPass.phone,
-      email: oldPass.email,
-      data: buildResetData(oldPass.data.type as RenewableType, wallet),
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    }
-
-    oldPass.status = 'archived'
-
-    const [saved] = await Promise.all([
-      this._passRepository.save(newPass),
-      this._passRepository.update(oldPass),
-    ])
-
-    const pushTokens = await this._passRepository.findPushTokensByPassToken(oldPass.token)
+    const redeemEvent = REDEEM_EVENT[type]
+    const pushTokens = await this._passRepository.findPushTokensByPassToken(saved.token)
 
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
       updateGoogleWalletObject(wallet, saved),
-      this._passEventRepository.save({
-        id: randomUUID(),
-        organizationId: dto.organizationId,
-        walletId: oldPass.walletId,
-        passId: saved.id,
-        type: 'pass_created',
-        metadata: { passType: oldPass.data.type, renewedFrom: oldPass.id },
-        createdBy: dto.adminId,
-        createdAt: now,
-      }),
+      ...(redeemEvent
+        ? [this._passEventRepository.save({
+            id: randomUUID(),
+            organizationId: dto.organizationId,
+            walletId: saved.walletId,
+            passId: saved.id,
+            type: redeemEvent,
+            metadata: { passType: type, cycleCompleted: true },
+            createdBy: dto.adminId,
+            createdAt: now,
+          })]
+        : []),
     ])
 
     return saved
