@@ -5,6 +5,7 @@ import type { WalletRepository } from '../../domain/wallet/repository/WalletRepo
 import type { GeofenceRepository } from '../../domain/wallet/repository/GeofenceRepository.js'
 import type { ValidateDownloadTokenUseCase } from '../../application/pass/useCases/ValidateDownloadTokenUseCase.js'
 import type { RedeemDownloadTokenUseCase } from '../../application/pass/useCases/RedeemDownloadTokenUseCase.js'
+import type { EffectiveWalletResolver } from '../../application/wallet/services/EffectiveWalletResolver.js'
 import type { Pass } from '../../domain/pass/entities/Pass.js'
 import type { Wallet } from '../../domain/wallet/entities/Wallet.js'
 import type { CashbackRules, GiftCardRules } from '../../domain/wallet/entities/WalletRules.js'
@@ -124,6 +125,7 @@ export function appleRoutes(
   geofenceRepo: GeofenceRepository,
   validateDownloadToken: ValidateDownloadTokenUseCase,
   redeemDownloadToken: RedeemDownloadTokenUseCase,
+  effectiveWalletResolver: EffectiveWalletResolver,
 ) {
   return async (app: FastifyInstance) => {
 
@@ -143,13 +145,14 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send({ error: 'Wallet not found' })
 
+      const effectiveWallet = await effectiveWalletResolver.resolve(wallet, pass)
       const now = new Date()
       const [recentTransactions, activeGeofences] = await Promise.all([
-        buildRecentTransactions(db, pass, wallet),
+        buildRecentTransactions(db, pass, effectiveWallet),
         geofenceRepo.findActiveByWalletId(pass.walletId),
       ])
       const geofences = activeGeofences.filter(g => isGeofenceCurrentlyActive(g, now))
-      const buffer = await generatePkPass(wallet, pass, recentTransactions, geofences)
+      const buffer = await generatePkPass(effectiveWallet, pass, recentTransactions, geofences)
 
       if (dlToken) await redeemDownloadToken.run(dlToken)
 
@@ -174,11 +177,12 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send({ error: 'Wallet not found' })
 
+      const effectiveWallet = await effectiveWalletResolver.resolve(wallet, pass)
       const now = new Date()
       const activeGeofences = await geofenceRepo.findActiveByWalletId(pass.walletId)
       const geofences = activeGeofences.filter(g => isGeofenceCurrentlyActive(g, now))
 
-      const url = await generateGoogleWalletUrl(wallet, pass, geofences)
+      const url = await generateGoogleWalletUrl(effectiveWallet, pass, geofences)
 
       if (dlToken) await redeemDownloadToken.run(dlToken)
 
@@ -323,13 +327,14 @@ export function appleRoutes(
       const wallet = await walletRepo.findById(pass.walletId)
       if (!wallet) return reply.code(404).send()
 
+      const effectiveWallet = await effectiveWalletResolver.resolve(wallet, pass)
       const now = new Date()
       const [recentTransactions, activeGeofences] = await Promise.all([
-        buildRecentTransactions(db, pass, wallet),
+        buildRecentTransactions(db, pass, effectiveWallet),
         geofenceRepo.findActiveByWalletId(pass.walletId),
       ])
       const geofences = activeGeofences.filter(g => isGeofenceCurrentlyActive(g, now))
-      const buffer = await generatePkPass(wallet, pass, recentTransactions, geofences)
+      const buffer = await generatePkPass(effectiveWallet, pass, recentTransactions, geofences)
 
       reply
         .header('Content-Type', 'application/vnd.apple.pkpass')

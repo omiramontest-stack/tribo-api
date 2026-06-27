@@ -4,12 +4,14 @@ import type { PassRepository } from '../../../domain/pass/repository/PassReposit
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { CashbackTransactionRepository } from '../../../domain/cashback/repository/CashbackTransactionRepository.js'
 import type { PassEventRepository } from '../../../domain/analytics/repository/PassEventRepository.js'
+import type { EffectiveWalletResolver } from '../../wallet/services/EffectiveWalletResolver.js'
 import type { UseCase } from '../../common/UseCase.js'
 import type { UpdatePassDataDto } from '../dto/UpdatePassDataDto.js'
 import type { PassWithWallet } from './GetPassByTokenUseCase.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { PassData, StampsData, MembershipData, PointsData, CashbackData, BundleData, GiftCardData, CouponData } from '../../../domain/pass/entities/PassData.js'
+import { passTierLevel } from '../../../domain/pass/entities/PassData.js'
 import type { PassStatus } from '../../../domain/pass/entities/Pass.js'
 import type { StampsRules, MembershipRules, CashbackRules, CouponRules, PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import { AppError } from '../../common/AppError.js'
@@ -35,6 +37,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     private readonly _orgRepository: OrganizationRepository,
     private readonly _cashbackTransactionRepository: CashbackTransactionRepository,
     private readonly _passEventRepository: PassEventRepository,
+    private readonly _effectiveWalletResolver: EffectiveWalletResolver,
   ) {}
 
   async run(dto: UpdatePassDataDto): Promise<PassWithWallet> {
@@ -46,14 +49,18 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
 
     await this.validateAccess(wallet, dto)
 
-    const result = await this.resolveAction(pass, wallet, dto)
+    // Wallet efectiva: si el pase subió de nivel, sus reglas (umbral de sellos) y su
+    // diseño provienen del tier actual, no de la wallet base.
+    const effectiveWallet = await this._effectiveWalletResolver.resolve(wallet, pass)
+
+    const result = await this.resolveAction(pass, effectiveWallet, dto)
     pass.data = result.updatedData
     if (result.newStatus) pass.status = result.newStatus
 
     const updated = await this._passRepository.update(pass)
-    await this.dispatchUpdates(updated, wallet, dto, result)
+    await this.dispatchUpdates(updated, effectiveWallet, dto, result)
 
-    return { pass: updated, wallet }
+    return { pass: updated, wallet: effectiveWallet }
   }
 
   private async validateAccess(wallet: Wallet, dto: UpdatePassDataDto): Promise<void> {
@@ -127,6 +134,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
         walletId: pass.walletId,
         passId: pass.id,
         type: result.eventType,
+        tierLevel: passTierLevel(pass.data),
         metadata: result.eventMetadata,
         createdBy: dto.adminId,
         createdAt: new Date().toISOString(),

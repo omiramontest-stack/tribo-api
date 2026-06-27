@@ -14,6 +14,7 @@ export type PassEventType =
   | 'giftcard_credited'
   | 'giftcard_redeemed'
   | 'coupon_redeemed'
+  | 'wallet_upgraded'
 
 export interface PassEvent {
   id: string
@@ -21,6 +22,11 @@ export interface PassEvent {
   walletId: string
   passId: string
   type: PassEventType
+  /**
+   * Nivel (tier) de la wallet en el que ocurrió el evento. `null`/ausente para
+   * eventos previos a la introducción de tiers — se lee como Nivel 1.
+   */
+  tierLevel?: number | null
   metadata: Record<string, unknown> | null
   createdBy: string | null
   createdAt: string

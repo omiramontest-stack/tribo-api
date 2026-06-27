@@ -11,6 +11,8 @@ import type {
   TopCustomer,
   WalletInsights,
   EventBreakdownItem,
+  WalletTierBreakdown,
+  OrgTierSummary,
 } from '../../../domain/analytics/repository/AnalyticsRepository.js'
 import { localDateKey, localDateKeyNDaysAgo } from '../utils/tzDate.js'
 
@@ -176,6 +178,36 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
     }))
   }
 
+  async getOrgTierSummary(organizationId: string, period: AnalyticsPeriod): Promise<OrgTierSummary> {
+    const since = sinceDate(periodToDays(period))
+
+    const [upgradedPassIds, upgradesInPeriod, distRows] = await Promise.all([
+      this._db.passEvent.findMany({
+        where: { organizationId, type: PassEventType.wallet_upgraded, pass: ACTIVE_PASS },
+        select: { passId: true },
+        distinct: ['passId'],
+      }),
+      this._db.passEvent.count({
+        where: { organizationId, type: PassEventType.wallet_upgraded, createdAt: { gte: since }, pass: ACTIVE_PASS },
+      }),
+      // Distribución por nivel agregada a través de todas las wallets de la org.
+      this._db.$queryRaw<{ level: number; count: bigint }[]>`
+        SELECT COALESCE((p."data"->>'tierLevel')::int, 1) AS level,
+               COUNT(*)::bigint AS count
+        FROM "Pass" p
+        JOIN "Wallet" w ON w.id = p."walletId"
+        WHERE w."organizationId" = ${organizationId} AND p."deletedAt" IS NULL
+        GROUP BY level
+        ORDER BY level ASC`,
+    ])
+
+    return {
+      upgradedPasses: upgradedPassIds.length,
+      upgradesInPeriod,
+      distribution: distRows.map(r => ({ level: Number(r.level), activeCount: Number(r.count) })),
+    }
+  }
+
   async getWalletSummary(walletId: string, _organizationId: string): Promise<WalletSummary> {
     const since30d = sinceDate(INACTIVE_THRESHOLD_DAYS)
 
@@ -287,5 +319,52 @@ export class AnalyticsPrismaRepository implements AnalyticsRepository {
     }))
 
     return { bestHour, bestDayOfWeek, topCustomers }
+  }
+
+  async getWalletTierBreakdown(walletId: string): Promise<WalletTierBreakdown> {
+    const [distRows, funnelRows, engagementRows] = await Promise.all([
+      // Distribución: pases activos por nivel actual. Los pases sin `tierLevel`
+      // (pre-tiers) cuentan como Nivel 1 vía COALESCE.
+      this._db.$queryRaw<{ level: number; count: bigint }[]>`
+        SELECT COALESCE(("data"->>'tierLevel')::int, 1) AS level,
+               COUNT(*)::bigint AS count
+        FROM "Pass"
+        WHERE "walletId" = ${walletId} AND "deletedAt" IS NULL
+        GROUP BY level
+        ORDER BY level ASC`,
+
+      // Funnel: pases distintos que evolucionaron a cada nivel (≥2).
+      this._db.$queryRaw<{ level: number; count: bigint }[]>`
+        SELECT "tierLevel" AS level,
+               COUNT(DISTINCT "passId")::bigint AS count
+        FROM "PassEvent"
+        WHERE "walletId" = ${walletId}
+          AND "type" = 'wallet_upgraded'
+          AND "tierLevel" IS NOT NULL
+        GROUP BY "tierLevel"
+        ORDER BY level ASC`,
+
+      // Engagement: escaneos y redenciones acumulados por nivel.
+      this._db.$queryRaw<{ level: number; scans: bigint; redemptions: bigint }[]>`
+        SELECT COALESCE("tierLevel", 1) AS level,
+               COUNT(*) FILTER (WHERE "type"::text = ANY(${SCAN_TYPES}::text[]))::bigint AS scans,
+               COUNT(*) FILTER (WHERE "type"::text = ANY(${REDEEM_TYPES}::text[]))::bigint AS redemptions
+        FROM "PassEvent"
+        WHERE "walletId" = ${walletId}
+          AND "type"::text = ANY(${SCAN_TYPES}::text[])
+          AND EXISTS (SELECT 1 FROM "Pass" p WHERE p.id = "passId" AND p."deletedAt" IS NULL)
+        GROUP BY level
+        ORDER BY level ASC`,
+    ])
+
+    return {
+      distribution: distRows.map(r => ({ level: Number(r.level), activeCount: Number(r.count) })),
+      funnel: funnelRows.map(r => ({ level: Number(r.level), reachedCount: Number(r.count) })),
+      engagement: engagementRows.map(r => ({
+        level: Number(r.level),
+        scans: Number(r.scans),
+        redemptions: Number(r.redemptions),
+      })),
+    }
   }
 }

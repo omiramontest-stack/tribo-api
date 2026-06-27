@@ -1,7 +1,8 @@
-import type { PrismaClient } from '@prisma/client'
+import { type PrismaClient, Prisma } from '@prisma/client'
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
 import type { Wallet, WalletType } from '../../../domain/wallet/entities/Wallet.js'
 import type { WalletRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { WalletThemeOverrides } from '../../../domain/wallet/entities/WalletTheme.js'
 
 export class WalletPrismaRepository implements WalletRepository {
   constructor(private readonly _db: PrismaClient) {}
@@ -33,6 +34,7 @@ export class WalletPrismaRepository implements WalletRepository {
         description: wallet.description,
         rules: wallet.rules as object,
         businessRules: wallet.businessRules,
+        theme: (wallet.theme ?? Prisma.JsonNull) as Prisma.InputJsonValue,
       },
     })
     return this._toEntity(row)
@@ -49,6 +51,7 @@ export class WalletPrismaRepository implements WalletRepository {
         description: wallet.description,
         rules: wallet.rules as object,
         businessRules: wallet.businessRules,
+        theme: (wallet.theme ?? Prisma.JsonNull) as Prisma.InputJsonValue,
       },
     })
     return this._toEntity(row)
@@ -70,6 +73,7 @@ export class WalletPrismaRepository implements WalletRepository {
       description: row.description,
       rules: row.rules as unknown as WalletRules,
       businessRules: row.businessRules ?? null,
+      theme: (row.theme as WalletThemeOverrides | null) ?? null,
       createdAt: row.createdAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,
     }

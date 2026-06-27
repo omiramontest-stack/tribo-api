@@ -25,6 +25,24 @@ export function businessRulesBackField(businessRules: string | null | undefined)
   return [{ key: 'business_rules', label: 'Términos y condiciones', value: businessRules }]
 }
 
+/** Datos de contacto del theme (web, teléfono, dirección, Instagram) como backFields. */
+export function themeBackFields(back: {
+  website: string | null
+  phone: string | null
+  address: string | null
+  instagram: string | null
+}): PassField[] {
+  const entries: [string, string, string | null][] = [
+    ['contact_website', 'Sitio web', back.website],
+    ['contact_phone', 'Teléfono', back.phone],
+    ['contact_address', 'Dirección', back.address],
+    ['contact_instagram', 'Instagram', back.instagram],
+  ]
+  return entries
+    .filter((e): e is [string, string, string] => !!e[2]?.trim())
+    .map(([key, label, value]) => ({ key, label, value }))
+}
+
 export function formatCurrency(amount: number, currency: string): string {
   return `${currency} ${amount.toFixed(2)}`
 }

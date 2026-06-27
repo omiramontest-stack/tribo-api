@@ -7,6 +7,14 @@ import type { Pass } from '../../domain/pass/entities/Pass.js'
 import type { Geofence } from '../../domain/wallet/entities/Geofence.js'
 import type { StampsData, MembershipData, PointsData, CashbackData, DaypassData, BundleData, GiftCardData, CouponData } from '../../domain/pass/entities/PassData.js'
 import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules, BundleRules, GiftCardRules, CouponRules } from '../../domain/wallet/entities/WalletRules.js'
+import { resolveWalletTheme } from '../../domain/wallet/entities/WalletTheme.js'
+import type { BarcodeFormat } from '../../domain/wallet/entities/WalletTheme.js'
+
+const GOOGLE_BARCODE_TYPE: Record<BarcodeFormat, string> = {
+  qr: 'QR_CODE',
+  pdf417: 'PDF_417',
+  code128: 'CODE_128',
+}
 
 const ISSUER_ID = process.env.GOOGLE_WALLET_ISSUER_ID!
 const API_URL = process.env.API_URL!
@@ -65,10 +73,19 @@ function buildLoyaltyClass(wallet: Wallet, geofences: Geofence[] = []) {
   else if (rules.type === 'giftcard') rewardsTier = `Gift Card ${(rules as GiftCardRules).currency}`
   else if (rules.type === 'coupon') rewardsTier = `${(rules as CouponRules).discount}${(rules as CouponRules).discountType === 'percent' ? '%' : ` ${(rules as CouponRules).currency ?? ''}`} descuento`
 
+  const theme = resolveWalletTheme(wallet)
+
   const textModulesData: { header: string; body: string; id: string }[] = []
   if (wallet.businessRules?.trim()) {
     textModulesData.push({ header: 'Términos y condiciones', body: wallet.businessRules, id: 'business_rules' })
   }
+
+  // Datos de contacto del theme → enlaces del reverso de la tarjeta.
+  const contactLinks = [
+    theme.back.website ? { uri: theme.back.website, description: 'Sitio web', id: 'contact_website' } : null,
+    theme.back.phone ? { uri: `tel:${theme.back.phone}`, description: 'Teléfono', id: 'contact_phone' } : null,
+    theme.back.instagram ? { uri: theme.back.instagram, description: 'Instagram', id: 'contact_instagram' } : null,
+  ].filter((l): l is { uri: string; description: string; id: string } => l !== null)
 
   return {
     id: classId,
@@ -78,12 +95,15 @@ function buildLoyaltyClass(wallet: Wallet, geofences: Geofence[] = []) {
       sourceUri: { uri: wallet.logoUrl || `${API_URL}/logo-placeholder.png` },
       contentDescription: { defaultValue: { language: 'es', value: wallet.businessName } },
     },
-    hexBackgroundColor: wallet.primaryColor,
+    hexBackgroundColor: theme.colors.background,
     reviewStatus: 'UNDER_REVIEW',
     rewardsTier,
     rewardsTierLabel: wallet.description,
     linksModuleData: {
-      uris: [{ uri: `${API_URL}/w/`, description: 'Ver mi tarjeta', id: 'wallet_link' }],
+      uris: [
+        { uri: `${API_URL}/w/`, description: 'Ver mi tarjeta', id: 'wallet_link' },
+        ...contactLinks,
+      ],
     },
     ...(textModulesData.length > 0 ? { textModulesData } : {}),
     ...(geofences.length > 0 ? { locations: buildGoogleLocations(geofences) } : {}),
@@ -95,6 +115,7 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
   const classId = buildClassId(wallet.id)
   const rules = wallet.rules
   const data = pass.data
+  const theme = resolveWalletTheme(wallet)
 
   let points = { balance: { string: '0' }, label: 'Puntos' }
   let secondaryText = ''
@@ -168,10 +189,11 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
       { header: 'Info', body: secondaryText, id: 'info' },
     ],
     barcode: {
-      type: 'QR_CODE',
+      type: GOOGLE_BARCODE_TYPE[theme.barcode.format],
       value: `${API_URL}/w/${pass.token}`,
+      ...(theme.barcode.altText ? { alternateText: theme.barcode.altText } : {}),
     },
-    hexBackgroundColor: wallet.primaryColor,
+    hexBackgroundColor: theme.colors.background,
     ...stampHeroImage,
   }
 }

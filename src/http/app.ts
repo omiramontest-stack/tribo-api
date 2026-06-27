@@ -5,6 +5,8 @@ import { AppError } from '../application/common/AppError.js'
 
 // Repositories
 import { WalletPrismaRepository } from '../infrastructure/wallet/repository/WalletPrismaRepository.js'
+import { WalletTierPrismaRepository } from '../infrastructure/wallet/repository/WalletTierPrismaRepository.js'
+import { EffectiveWalletResolver } from '../application/wallet/services/EffectiveWalletResolver.js'
 import { GeofencePrismaRepository } from '../infrastructure/wallet/repository/GeofencePrismaRepository.js'
 import { PassPrismaRepository } from '../infrastructure/pass/repository/PassPrismaRepository.js'
 import { PassDownloadTokenPrismaRepository } from '../infrastructure/pass/repository/PassDownloadTokenPrismaRepository.js'
@@ -49,6 +51,10 @@ import { GetGeofencesUseCase } from '../application/wallet/useCases/GetGeofences
 import { CreateGeofenceUseCase } from '../application/wallet/useCases/CreateGeofenceUseCase.js'
 import { UpdateGeofenceUseCase } from '../application/wallet/useCases/UpdateGeofenceUseCase.js'
 import { DeleteGeofenceUseCase } from '../application/wallet/useCases/DeleteGeofenceUseCase.js'
+import { ListWalletTiersUseCase } from '../application/wallet/useCases/ListWalletTiersUseCase.js'
+import { CreateWalletTierUseCase } from '../application/wallet/useCases/CreateWalletTierUseCase.js'
+import { UpdateWalletTierUseCase } from '../application/wallet/useCases/UpdateWalletTierUseCase.js'
+import { DeleteWalletTierUseCase } from '../application/wallet/useCases/DeleteWalletTierUseCase.js'
 
 // Use cases — pass
 import { GeneratePassUseCase } from '../application/pass/useCases/GeneratePassUseCase.js'
@@ -123,6 +129,7 @@ import { authRoutes } from './routes/auth.routes.js'
 import { organizationRoutes } from './routes/organization.routes.js'
 import { walletRoutes } from './routes/wallet.routes.js'
 import { geofenceRoutes } from './routes/geofence.routes.js'
+import { walletTierRoutes } from './routes/walletTier.routes.js'
 import { passRoutes } from './routes/pass.routes.js'
 import { appleRoutes } from './routes/apple.routes.js'
 import { analyticsRoutes } from './routes/analytics.routes.js'
@@ -138,6 +145,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
 
   // Repositories
   const walletRepo = new WalletPrismaRepository(prisma)
+  const walletTierRepo = new WalletTierPrismaRepository(prisma)
+  const effectiveWalletResolver = new EffectiveWalletResolver(walletTierRepo)
   const geofenceRepo = new GeofencePrismaRepository(prisma)
   const passRepo = new PassPrismaRepository(prisma)
   const passDownloadTokenRepo = new PassDownloadTokenPrismaRepository(prisma)
@@ -183,7 +192,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getWallets = new GetWalletsUseCase(walletRepo, orgRepo)
   const getWalletById = new GetWalletByIdUseCase(walletRepo, orgRepo)
   const deleteWallet = new DeleteWalletUseCase(walletRepo, passRepo, orgRepo)
-  const updateWallet = new UpdateWalletUseCase(walletRepo, passRepo, orgRepo)
+  const updateWallet = new UpdateWalletUseCase(walletRepo, walletTierRepo, passRepo, orgRepo)
 
   // Geofence use cases
   const getGeofences = new GetGeofencesUseCase(geofenceRepo, walletRepo, orgRepo)
@@ -191,16 +200,21 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const updateGeofence = new UpdateGeofenceUseCase(geofenceRepo, walletRepo, passRepo, orgRepo)
   const deleteGeofence = new DeleteGeofenceUseCase(geofenceRepo, walletRepo, passRepo, orgRepo)
 
+  const listWalletTiers = new ListWalletTiersUseCase(walletTierRepo, walletRepo, orgRepo)
+  const createWalletTier = new CreateWalletTierUseCase(walletTierRepo, walletRepo, orgRepo)
+  const updateWalletTier = new UpdateWalletTierUseCase(walletTierRepo, walletRepo, orgRepo)
+  const deleteWalletTier = new DeleteWalletTierUseCase(walletTierRepo, walletRepo, orgRepo)
+
   // Pass use cases
   const generatePass = new GeneratePassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
-  const getPassByToken = new GetPassByTokenUseCase(walletRepo, passRepo)
+  const getPassByToken = new GetPassByTokenUseCase(walletRepo, passRepo, effectiveWalletResolver)
   const getPassesByWallet = new GetPassesByWalletUseCase(passRepo, walletRepo, orgRepo)
-  const updatePassData = new UpdatePassDataUseCase(walletRepo, passRepo, orgRepo, cashbackTransactionRepo, passEventRepo)
+  const updatePassData = new UpdatePassDataUseCase(walletRepo, passRepo, orgRepo, cashbackTransactionRepo, passEventRepo, effectiveWalletResolver)
   const deletePass = new DeletePassUseCase(passRepo, walletRepo, orgRepo, passEventRepo)
   const scanDaypass = new ScanDaypassUseCase(passRepo, walletRepo, passEventRepo)
   const getScannedDaypasses = new GetScannedDaypassesUseCase(passRepo, walletRepo, orgRepo)
   const sendPassLink = new SendPassLinkUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo)
-  const renewPass = new RenewPassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
+  const renewPass = new RenewPassUseCase(walletRepo, walletTierRepo, passRepo, orgRepo, passEventRepo)
   const unarchivePass = new UnarchivePassUseCase(passRepo, walletRepo, orgRepo)
   const whatsappManager = new WhatsAppSessionManager(prisma)
   const whatsappCleanup = new WhatsAppCleanupWorker(prisma)
@@ -213,8 +227,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getCashbackTransactions = new GetCashbackTransactionsUseCase(passRepo, walletRepo, orgRepo, cashbackTransactionRepo)
 
   // Analytics use cases
-  const getOrgAnalytics = new GetOrgAnalyticsUseCase(analyticsRepo, orgRepo)
-  const getWalletAnalytics = new GetWalletAnalyticsUseCase(analyticsRepo, walletRepo, orgRepo)
+  const getOrgAnalytics = new GetOrgAnalyticsUseCase(analyticsRepo, orgRepo, walletTierRepo)
+  const getWalletAnalytics = new GetWalletAnalyticsUseCase(analyticsRepo, walletRepo, walletTierRepo, orgRepo)
 
   // Campaign
   const campaignRepo = new CampaignPrismaRepository(prisma)
@@ -250,9 +264,10 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(organizationRoutes(getMyOrganizations, getMembers, inviteUser, getInvitation, acceptInvitation, updateOrganization, updateMemberRole, removeMember, createOrganization))
   app.register(walletRoutes(createWallet, getWallets, getWalletById, deleteWallet, updateWallet, walletRepo, planGuard))
   app.register(geofenceRoutes(getGeofences, createGeofence, updateGeofence, deleteGeofence))
+  app.register(walletTierRoutes(listWalletTiers, createWalletTier, updateWalletTier, deleteWalletTier))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp, renewPass, unarchivePass))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
-  app.register(appleRoutes(prisma, passRepo, walletRepo, geofenceRepo, validateDownloadToken, redeemDownloadToken))
+  app.register(appleRoutes(prisma, passRepo, walletRepo, geofenceRepo, validateDownloadToken, redeemDownloadToken, effectiveWalletResolver))
   app.register(analyticsRoutes(getOrgAnalytics, getWalletAnalytics))
   app.register(campaignRoutes(createCampaign, previewAudience, scheduleCampaign, cancelCampaign, getCampaigns, getCampaignById, getCampaignStats, planGuard))
   app.register(billingRoutes(getBillingStatus, createCheckout, buyCredits, handleWebhook, billingRepo, stripeService))

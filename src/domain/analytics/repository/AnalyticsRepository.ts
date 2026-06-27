@@ -60,13 +60,52 @@ export interface WalletInsights {
   topCustomers: TopCustomer[]
 }
 
+/** Pases activos actualmente en cada nivel (snapshot). */
+export interface TierDistributionItem {
+  level: number
+  activeCount: number
+}
+
+/** Pases distintos que evolucionaron hacia cada nivel (≥2) — funnel de conversión. */
+export interface TierFunnelItem {
+  level: number
+  reachedCount: number
+}
+
+/** Escaneos y redenciones acumulados ocurridos en cada nivel. */
+export interface TierEngagementItem {
+  level: number
+  scans: number
+  redemptions: number
+}
+
+export interface WalletTierBreakdown {
+  distribution: TierDistributionItem[]
+  funnel: TierFunnelItem[]
+  engagement: TierEngagementItem[]
+}
+
+/** Resumen de tiers agregado a nivel organización — KPIs de lealtad. */
+export interface OrgTierSummary {
+  /** Pases distintos que han evolucionado de nivel al menos una vez. */
+  upgradedPasses: number
+  /** Upgrades ocurridos dentro del periodo. */
+  upgradesInPeriod: number
+  /** Pases activos por nivel, agregados a través de todas las wallets. */
+  distribution: TierDistributionItem[]
+}
+
 export interface AnalyticsRepository {
   getOrgSummary(organizationId: string, period: AnalyticsPeriod): Promise<OrgSummary>
   getOrgChartByDay(organizationId: string, period: AnalyticsPeriod): Promise<DayCount[]>
   getOrgActivityFeed(organizationId: string, limit: number): Promise<ActivityFeedItem[]>
   getOrgTopWallets(organizationId: string, period: AnalyticsPeriod): Promise<TopWallet[]>
   getOrgEventBreakdown(organizationId: string, period: AnalyticsPeriod): Promise<EventBreakdownItem[]>
+  /** Resumen de tiers de la org. Solo relevante si hay upgrades configurados. */
+  getOrgTierSummary(organizationId: string, period: AnalyticsPeriod): Promise<OrgTierSummary>
   getWalletSummary(walletId: string, organizationId: string): Promise<WalletSummary>
   getWalletChartByDay(walletId: string, days: number): Promise<DayCount[]>
   getWalletInsights(walletId: string): Promise<WalletInsights>
+  /** Métricas por nivel (tier). Solo relevante para wallets con upgrades configurados. */
+  getWalletTierBreakdown(walletId: string): Promise<WalletTierBreakdown>
 }

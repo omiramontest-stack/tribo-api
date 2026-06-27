@@ -34,7 +34,7 @@ export const STAMP_ICONS = [
 
 const stampIconIds = STAMP_ICONS.map(i => i.id) as [StampIcon, ...StampIcon[]]
 
-const rulesSchema = z.discriminatedUnion('type', [
+export const rulesSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('stamps'),
     totalStamps: z.number().int().min(1),
@@ -52,6 +52,38 @@ const rulesSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('coupon'), discount: z.number().positive(), discountType: z.enum(['percent', 'fixed']), currency: z.string().optional(), expiresInDays: z.number().int().positive().nullable() }),
 ])
 
+// Color hex de 6 dígitos — los del theme alimentan el render directamente (hexToRgb).
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a 6-digit hex color, e.g. #1A1A1A')
+
+// Personalización visual del negocio. Todo opcional: lo no enviado cae al default
+// (fondo = primaryColor, texto/label blanco, QR, fondo plano).
+export const themeSchema = z.object({
+  colors: z.object({
+    background: hexColor.optional(),
+    foreground: hexColor.optional(),
+    label: hexColor.optional(),
+    accent: hexColor.optional(),
+    gradientTo: hexColor.nullable().optional(),
+  }).optional(),
+  typography: z.object({
+    fontKey: z.enum(['system', 'rounded', 'serif', 'mono']).optional(),
+  }).optional(),
+  assets: z.object({
+    logoUrl: z.string().url().nullable().optional(),
+    stripImageUrl: z.string().url().nullable().optional(),
+  }).optional(),
+  barcode: z.object({
+    format: z.enum(['qr', 'pdf417', 'code128']).optional(),
+    altText: z.string().nullable().optional(),
+  }).optional(),
+  back: z.object({
+    website: z.string().url().nullable().optional(),
+    phone: z.string().nullable().optional(),
+    address: z.string().nullable().optional(),
+    instagram: z.string().nullable().optional(),
+  }).optional(),
+})
+
 const createSchema = z.object({
   type: z.enum(['stamps', 'membership', 'points', 'cashback', 'daypass', 'bundle', 'giftcard', 'coupon']),
   businessName: z.string().min(1),
@@ -61,6 +93,7 @@ const createSchema = z.object({
   description: z.string(),
   rules: rulesSchema,
   businessRules: z.string().nullable().optional(),
+  theme: themeSchema.nullable().optional(),
 })
 
 // Schema para edición parcial de wallet — todos los campos son opcionales
@@ -72,6 +105,7 @@ const updateSchema = z.object({
   description: z.string().optional(),
   rules: rulesSchema.optional(),
   businessRules: z.string().nullable().optional(),
+  theme: themeSchema.nullable().optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' })
 
 export function walletRoutes(

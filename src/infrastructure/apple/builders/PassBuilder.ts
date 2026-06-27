@@ -3,6 +3,14 @@ import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { Geofence } from '../../../domain/wallet/entities/Geofence.js'
 import type { RecentTransaction } from '../utils/passFieldUtils.js'
 import { hexToRgb } from '../utils/colorUtils.js'
+import { resolveWalletTheme } from '../../../domain/wallet/entities/WalletTheme.js'
+import type { BarcodeFormat } from '../../../domain/wallet/entities/WalletTheme.js'
+
+const APPLE_BARCODE_FORMAT: Record<BarcodeFormat, string> = {
+  qr: 'PKBarcodeFormatQR',
+  pdf417: 'PKBarcodeFormatPDF417',
+  code128: 'PKBarcodeFormatCode128',
+}
 
 export type BasePassJson = ReturnType<typeof buildBasePassJson>
 
@@ -22,6 +30,10 @@ export function buildBasePassJson(wallet: Wallet, pass: Pass, geofences: Geofenc
     relevantText: g.message,
   }))
 
+  // Theme resuelto: sin overrides equivale a fondo = primaryColor y texto/label
+  // blanco (comportamiento histórico). El negocio puede sobreescribir cada color.
+  const theme = resolveWalletTheme(wallet)
+
   return {
     formatVersion: 1,
     passTypeIdentifier: PASS_TYPE_ID,
@@ -29,16 +41,17 @@ export function buildBasePassJson(wallet: Wallet, pass: Pass, geofences: Geofenc
     teamIdentifier: TEAM_ID,
     organizationName: wallet.businessName,
     description: wallet.description || wallet.businessName,
-    backgroundColor: hexToRgb(wallet.primaryColor),
-    foregroundColor: 'rgb(255,255,255)',
-    labelColor: 'rgb(255,255,255)',
+    backgroundColor: hexToRgb(theme.colors.background),
+    foregroundColor: hexToRgb(theme.colors.foreground),
+    labelColor: hexToRgb(theme.colors.label),
     webServiceURL: `${API_URL}/`,
     authenticationToken: pass.authToken,
     barcodes: [
       {
         message: `${API_URL}/w/${pass.token}`,
-        format: 'PKBarcodeFormatQR',
+        format: APPLE_BARCODE_FORMAT[theme.barcode.format],
         messageEncoding: 'iso-8859-1',
+        ...(theme.barcode.altText ? { altText: theme.barcode.altText } : {}),
       },
     ],
     ...(locations.length > 0 && { locations }),

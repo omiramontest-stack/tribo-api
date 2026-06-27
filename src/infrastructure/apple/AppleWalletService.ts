@@ -17,7 +17,8 @@ import { StampsStripGenerator } from './assets/StampsStripGenerator.js'
 import { PointsStripGenerator } from './assets/PointsStripGenerator.js'
 import { fetchImageBuffer, PLACEHOLDER_ICON } from './utils/imageUtils.js'
 import { ensureWcagContrast } from './utils/colorUtils.js'
-import type { RecentTransaction } from './utils/passFieldUtils.js'
+import { themeBackFields, type RecentTransaction } from './utils/passFieldUtils.js'
+import { resolveWalletTheme } from '../../domain/wallet/entities/WalletTheme.js'
 
 export type { RecentTransaction }
 
@@ -34,6 +35,21 @@ const builders: Record<WalletType, PassBuilder> = {
   bundle: new BundlePassBuilder(),
   giftcard: new GiftCardPassBuilder(),
   coupon: new CouponPassBuilder(),
+}
+
+const APPLE_PASS_STYLES = ['storeCard', 'coupon', 'eventTicket', 'generic', 'boardingPass'] as const
+
+/** Anexa los backFields de contacto del theme al estilo de pase que el builder produjo. */
+function appendThemeBackFields(passJson: object, back: Parameters<typeof themeBackFields>[0]): void {
+  const extra = themeBackFields(back)
+  if (extra.length === 0) return
+
+  const json = passJson as Record<string, { backFields?: unknown[] } | undefined>
+  const styleKey = APPLE_PASS_STYLES.find(k => json[k])
+  if (!styleKey) return
+
+  const style = json[styleKey]!
+  style.backFields = [...(style.backFields ?? []), ...extra]
 }
 
 export async function generatePkPass(
@@ -56,6 +72,10 @@ export async function generatePkPass(
     builder.buildJson(safeWallet, pass, recentTransactions, geofences),
     builder.buildAssets(safeWallet, pass),
   ])
+
+  // Datos de contacto del theme → backFields, inyectados una sola vez aquí en lugar
+  // de en cada uno de los 8 builders. Se anexan al estilo que el builder ya produjo.
+  appendThemeBackFields(passJson, resolveWalletTheme(safeWallet).back)
 
   const signerCert = process.env.APPLE_SIGNER_CERT!.replace(/\\n/g, '\n')
   const signerKey = process.env.APPLE_SIGNER_KEY!.replace(/\\n/g, '\n')

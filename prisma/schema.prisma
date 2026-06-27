@@ -130,14 +130,37 @@ model Wallet {
   description    String
   rules          Json
   businessRules  String?
+  /// Overrides visuales del negocio (WalletThemeOverrides). Null = render por defecto.
+  theme          Json?
   createdAt      DateTime   @default(now())
   deletedAt      DateTime?
   createdBy      String?
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   passes         Pass[]
   geofences      Geofence[]
+  tiers          WalletTier[]
 
   @@index([organizationId])
+}
+
+/// Nivel configurable de una wallet. El Nivel 1 es la wallet base (implícito, sin
+/// fila); las filas representan niveles 2+ a los que un pase evoluciona. `config`
+/// es un WalletThemeOverrides y `unlockRule` un UpgradeRule (unión discriminada).
+model WalletTier {
+  id         String    @id @default(cuid())
+  walletId   String
+  level      Int
+  name       String
+  rules      Json
+  config     Json?
+  unlockRule Json
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  wallet     Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, level])
+  @@index([walletId])
 }
 
 model Geofence {
@@ -417,6 +440,7 @@ enum PassEventType {
   giftcard_credited
   giftcard_redeemed
   coupon_redeemed
+  wallet_upgraded
 }
 
 model PassEvent {
@@ -425,6 +449,7 @@ model PassEvent {
   walletId       String
   passId         String
   type           PassEventType
+  tierLevel      Int?
   metadata       Json?
   createdBy      String?
   createdAt      DateTime      @default(now())
@@ -434,6 +459,7 @@ model PassEvent {
   @@index([organizationId, createdAt])
   @@index([walletId, type, createdAt])
   @@index([walletId, createdAt])
+  @@index([walletId, tierLevel, type, createdAt])
   @@index([passId, createdAt])
   @@index([type, createdAt])
 }

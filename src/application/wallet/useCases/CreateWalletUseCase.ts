@@ -5,6 +5,7 @@ import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { UseCase } from '../../common/UseCase.js'
 import type { CreateWalletDto } from '../dto/CreateWalletDto.js'
 import { AppError } from '../../common/AppError.js'
+import { assertThemeContrast } from '../utils/assertThemeContrast.js'
 
 export class CreateWalletUseCase implements UseCase<CreateWalletDto, Wallet> {
   constructor(
@@ -15,6 +16,8 @@ export class CreateWalletUseCase implements UseCase<CreateWalletDto, Wallet> {
   async run(dto: CreateWalletDto): Promise<Wallet> {
     const role = await this._orgRepository.getMemberRole(dto.adminId, dto.organizationId)
     if (!role || role === 'staff') throw new AppError('FORBIDDEN', 'Only owners and admins can create wallets', 403)
+
+    assertThemeContrast(dto.theme, dto.primaryColor)
 
     const wallet: Wallet = {
       id: randomUUID(),
@@ -27,6 +30,7 @@ export class CreateWalletUseCase implements UseCase<CreateWalletDto, Wallet> {
       description: dto.description,
       rules: dto.rules,
       businessRules: dto.businessRules ?? null,
+      theme: dto.theme ?? null,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     }

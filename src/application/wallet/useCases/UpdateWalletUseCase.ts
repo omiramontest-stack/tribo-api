@@ -1,10 +1,15 @@
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
+import type { WalletTierRepository } from '../../../domain/wallet/repository/WalletTierRepository.js'
 import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { WalletRules } from '../../../domain/wallet/entities/WalletRules.js'
+import type { WalletThemeOverrides } from '../../../domain/wallet/entities/WalletTheme.js'
+import { toEffectiveWallet } from '../../../domain/wallet/entities/WalletTier.js'
+import { passTierLevel } from '../../../domain/pass/entities/PassData.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
+import { assertThemeContrast } from '../utils/assertThemeContrast.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
 import { updateGoogleWalletObject } from '../../../infrastructure/google/GoogleWalletService.js'
 
@@ -19,11 +24,13 @@ export interface UpdateWalletDto {
   description?: string
   rules?: WalletRules
   businessRules?: string | null
+  theme?: WalletThemeOverrides | null
 }
 
 export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
   constructor(
     private readonly _walletRepository: WalletRepository,
+    private readonly _tierRepository: WalletTierRepository,
     private readonly _passRepository: PassRepository,
     private readonly _orgRepository: OrganizationRepository,
   ) {}
@@ -53,7 +60,10 @@ export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
       description: dto.description ?? existing.description,
       rules: dto.rules ?? existing.rules,
       businessRules: dto.businessRules !== undefined ? dto.businessRules : existing.businessRules,
+      theme: dto.theme !== undefined ? dto.theme : existing.theme,
     }
+
+    assertThemeContrast(updated.theme, updated.primaryColor)
 
     const saved = await this._walletRepository.update(updated)
 
@@ -70,18 +80,20 @@ export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
     // y solo devuelva los passes de esta wallet, no los de otras wallets del dispositivo.
     await this._passRepository.touchAllByWalletId(wallet.id)
 
-    const [passes, pushTokens] = await Promise.all([
+    const [passes, pushTokens, tiers] = await Promise.all([
       this._passRepository.findAllByWalletId(wallet.id),
       this._passRepository.findAllPushTokensByWalletId(wallet.id),
+      this._tierRepository.findByWalletId(wallet.id),
     ])
 
     if (!passes.length) return
 
     // Apple: un solo batch push — el iPhone llama al web service y descarga el .pkpass actualizado
-    // Google: actualizar cada objeto individualmente en la Google Wallet API
+    // Google: actualizar cada objeto individualmente, respetando el nivel de cada pase
+    // (un pase en Nivel 2 conserva el diseño de su tier, no el de la wallet base).
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
-      ...passes.map(pass => updateGoogleWalletObject(wallet, pass)),
+      ...passes.map(pass => updateGoogleWalletObject(toEffectiveWallet(wallet, tiers, passTierLevel(pass.data)), pass)),
     ])
   }
 }

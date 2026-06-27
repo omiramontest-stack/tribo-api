@@ -1,13 +1,17 @@
 import { randomUUID } from 'crypto'
 import type { WalletRepository } from '../../../domain/wallet/repository/WalletRepository.js'
+import type { WalletTierRepository } from '../../../domain/wallet/repository/WalletTierRepository.js'
 import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
 import type { OrganizationRepository } from '../../../domain/organization/repository/OrganizationRepository.js'
 import type { PassEventRepository } from '../../../domain/analytics/repository/PassEventRepository.js'
 import type { UseCase } from '../../common/UseCase.js'
 import type { RenewPassDto } from '../dto/RenewPassDto.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
+import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
 import type { StampsRules, BundleRules, PointsRules } from '../../../domain/wallet/entities/WalletRules.js'
 import type { PassData } from '../../../domain/pass/entities/PassData.js'
+import { passTierLevel, passCompletedCycles } from '../../../domain/pass/entities/PassData.js'
+import { resolveTargetTierLevel, toEffectiveWallet } from '../../../domain/wallet/entities/WalletTier.js'
 import type { PassEventType } from '../../../domain/analytics/entities/PassEvent.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
@@ -29,28 +33,38 @@ const REDEEM_EVENT: Record<RenewableType, PassEventType | null> = {
   bundle: null,
 }
 
-function buildResetData(type: RenewableType, wallet: Awaited<ReturnType<WalletRepository['findById']>> & object): PassData {
+interface TierProgress {
+  tierLevel: number
+  completedCycles: number
+}
+
+function buildResetData(
+  type: RenewableType,
+  wallet: Wallet,
+  tier: TierProgress,
+): PassData {
   function calcExpiry(days: number | null): string | null {
     return days ? new Date(Date.now() + days * 86400000).toISOString() : null
   }
 
   if (type === 'stamps') {
     const rules = wallet.rules as StampsRules
-    return { type: 'stamps', currentStamps: 0, expiresAt: calcExpiry(rules.expiresInDays) }
+    return { type: 'stamps', currentStamps: 0, expiresAt: calcExpiry(rules.expiresInDays), ...tier }
   }
 
   if (type === 'bundle') {
     const rules = wallet.rules as BundleRules
-    return { type: 'bundle', remainingUses: rules.totalUses, expiresAt: calcExpiry(rules.expiresInDays) }
+    return { type: 'bundle', remainingUses: rules.totalUses, expiresAt: calcExpiry(rules.expiresInDays), ...tier }
   }
 
   const rules = wallet.rules as PointsRules
-  return { type: 'points', currentPoints: 0, expiresAt: calcExpiry(rules.expiresInDays) }
+  return { type: 'points', currentPoints: 0, expiresAt: calcExpiry(rules.expiresInDays), ...tier }
 }
 
 export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
   constructor(
     private readonly _walletRepository: WalletRepository,
+    private readonly _tierRepository: WalletTierRepository,
     private readonly _passRepository: PassRepository,
     private readonly _orgRepository: OrganizationRepository,
     private readonly _passEventRepository: PassEventRepository,
@@ -79,7 +93,17 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
     // Reinicio in-place: conservamos id/token/authToken para que el pase YA instalado
     // (Apple/Google) se actualice por push, sin obligar al cliente a re-descargarlo.
     const type = pass.data.type as RenewableType
-    pass.data = buildResetData(type, wallet)
+    const fromLevel = passTierLevel(pass.data)
+    const completedCycles = passCompletedCycles(pass.data) + 1
+
+    // Motor de upgrade: el ciclo recién completado puede desbloquear un nivel superior.
+    // El reinicio usa las reglas del nivel RESULTANTE (ej. menos sellos en el Nivel 2).
+    const tiers = await this._tierRepository.findByWalletId(wallet.id)
+    const toLevel = Math.max(fromLevel, resolveTargetTierLevel(completedCycles, tiers))
+    const effectiveWallet = toEffectiveWallet(wallet, tiers, toLevel)
+    const upgraded = toLevel > fromLevel
+
+    pass.data = buildResetData(type, effectiveWallet, { tierLevel: toLevel, completedCycles })
     pass.status = 'active'
 
     const saved = await this._passRepository.update(pass)
@@ -90,7 +114,8 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
 
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
-      updateGoogleWalletObject(wallet, saved),
+      updateGoogleWalletObject(effectiveWallet, saved),
+      // Redención contabilizada en el nivel donde se ganó el premio (fromLevel).
       ...(redeemEvent
         ? [this._passEventRepository.save({
             id: randomUUID(),
@@ -98,7 +123,22 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
             walletId: saved.walletId,
             passId: saved.id,
             type: redeemEvent,
-            metadata: { passType: type, cycleCompleted: true },
+            tierLevel: fromLevel,
+            metadata: { passType: type, cycleCompleted: true, completedCycles },
+            createdBy: dto.adminId,
+            createdAt: now,
+          })]
+        : []),
+      // Evolución de nivel — alimenta el funnel de conversión de tiers.
+      ...(upgraded
+        ? [this._passEventRepository.save({
+            id: randomUUID(),
+            organizationId: dto.organizationId,
+            walletId: saved.walletId,
+            passId: saved.id,
+            type: 'wallet_upgraded',
+            tierLevel: toLevel,
+            metadata: { from: fromLevel, to: toLevel, completedCycles },
             createdBy: dto.adminId,
             createdAt: now,
           })]

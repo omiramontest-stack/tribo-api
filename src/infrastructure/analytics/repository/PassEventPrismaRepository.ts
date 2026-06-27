@@ -13,6 +13,7 @@ export class PassEventPrismaRepository implements PassEventRepository {
         walletId: event.walletId,
         passId: event.passId,
         type: event.type,
+        tierLevel: event.tierLevel ?? null,
         metadata: (event.metadata ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         createdBy: event.createdBy,
         createdAt: new Date(event.createdAt),
