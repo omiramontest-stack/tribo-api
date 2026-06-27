@@ -18,6 +18,7 @@ function toPlan(r: Awaited<ReturnType<PrismaClient['plan']['findUniqueOrThrow']>
     smsCampaigns: r.smsCampaigns,
     analyticsLevel: r.analyticsLevel as AnalyticsLevel,
     geofencesPerWallet: r.geofencesPerWallet,
+    removeBranding: r.removeBranding,
     isActive: r.isActive,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),

@@ -19,6 +19,7 @@ import { fetchImageBuffer, PLACEHOLDER_ICON } from './utils/imageUtils.js'
 import { ensureWcagContrast } from './utils/colorUtils.js'
 import { themeBackFields, type RecentTransaction } from './utils/passFieldUtils.js'
 import { resolveWalletTheme } from '../../domain/wallet/entities/WalletTheme.js'
+import type { PlatformBranding } from '../../domain/branding/PlatformBranding.js'
 
 export type { RecentTransaction }
 
@@ -39,17 +40,16 @@ const builders: Record<WalletType, PassBuilder> = {
 
 const APPLE_PASS_STYLES = ['storeCard', 'coupon', 'eventTicket', 'generic', 'boardingPass'] as const
 
-/** Anexa los backFields de contacto del theme al estilo de pase que el builder produjo. */
-function appendThemeBackFields(passJson: object, back: Parameters<typeof themeBackFields>[0]): void {
-  const extra = themeBackFields(back)
-  if (extra.length === 0) return
+/** Anexa backFields al estilo de pase que el builder produjo (storeCard, coupon, …). */
+function appendBackFields(passJson: object, fields: unknown[]): void {
+  if (fields.length === 0) return
 
   const json = passJson as Record<string, { backFields?: unknown[] } | undefined>
   const styleKey = APPLE_PASS_STYLES.find(k => json[k])
   if (!styleKey) return
 
   const style = json[styleKey]!
-  style.backFields = [...(style.backFields ?? []), ...extra]
+  style.backFields = [...(style.backFields ?? []), ...fields]
 }
 
 export async function generatePkPass(
@@ -57,6 +57,7 @@ export async function generatePkPass(
   pass: Pass,
   recentTransactions: RecentTransaction[] = [],
   geofences: Geofence[] = [],
+  branding: PlatformBranding | null = null,
 ): Promise<Buffer> {
   const builder = builders[wallet.rules.type]
   if (!builder) throw new Error(`No builder registered for wallet type: ${wallet.rules.type}`)
@@ -77,7 +78,12 @@ export async function generatePkPass(
 
   // Datos de contacto del theme → backFields, inyectados una sola vez aquí en lugar
   // de en cada uno de los 8 builders. Se anexan al estilo que el builder ya produjo.
-  appendThemeBackFields(passJson, resolveWalletTheme(safeWallet).back)
+  appendBackFields(passJson, themeBackFields(resolveWalletTheme(safeWallet).back))
+
+  // Sello de plataforma (gateado por plan) en el reverso del pase.
+  if (branding) {
+    appendBackFields(passJson, [{ key: 'tribowallet', label: branding.label, value: branding.url }])
+  }
 
   const signerCert = process.env.APPLE_SIGNER_CERT!.replace(/\\n/g, '\n')
   const signerKey = process.env.APPLE_SIGNER_KEY!.replace(/\\n/g, '\n')

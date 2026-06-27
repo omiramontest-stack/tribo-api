@@ -9,6 +9,7 @@ import type { StampsData, MembershipData, PointsData, CashbackData, DaypassData,
 import type { StampsRules, MembershipRules, PointsRules, CashbackRules, DaypassRules, BundleRules, GiftCardRules, CouponRules } from '../../domain/wallet/entities/WalletRules.js'
 import { resolveWalletTheme } from '../../domain/wallet/entities/WalletTheme.js'
 import type { BarcodeFormat } from '../../domain/wallet/entities/WalletTheme.js'
+import type { PlatformBranding } from '../../domain/branding/PlatformBranding.js'
 
 const GOOGLE_BARCODE_TYPE: Record<BarcodeFormat, string> = {
   qr: 'QR_CODE',
@@ -110,7 +111,7 @@ function buildLoyaltyClass(wallet: Wallet, geofences: Geofence[] = []) {
   }
 }
 
-function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
+function buildLoyaltyObject(wallet: Wallet, pass: Pass, branding: PlatformBranding | null = null) {
   const objectId = buildObjectId(pass.token)
   const classId = buildClassId(wallet.id)
   const rules = wallet.rules
@@ -194,6 +195,10 @@ function buildLoyaltyObject(wallet: Wallet, pass: Pass) {
       ...(theme.barcode.altText ? { alternateText: theme.barcode.altText } : {}),
     },
     hexBackgroundColor: theme.colors.background,
+    // Sello de plataforma (gateado por plan) como enlace del pase.
+    ...(branding
+      ? { linksModuleData: { uris: [{ uri: branding.url, description: branding.label, id: 'tribowallet' }] } }
+      : {}),
     ...stampHeroImage,
   }
 }
@@ -250,13 +255,13 @@ export async function updateGoogleWalletClass(wallet: Wallet, geofences: Geofenc
   })
 }
 
-export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass, geofences: Geofence[] = []): Promise<string> {
+export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass, geofences: Geofence[] = [], branding: PlatformBranding | null = null): Promise<string> {
   logger.debug({ walletId: wallet.id, passToken: pass.token, issuerId: ISSUER_ID }, '[GoogleWallet] generateGoogleWalletUrl')
 
   await ensureClassExists(wallet, geofences)
 
   const credentials = getCredentials()
-  const loyaltyObject = buildLoyaltyObject(wallet, pass)
+  const loyaltyObject = buildLoyaltyObject(wallet, pass, branding)
 
   logger.debug({ objectId: loyaltyObject.id, classId: loyaltyObject.classId }, '[GoogleWallet] loyaltyObject')
 
@@ -274,7 +279,7 @@ export async function generateGoogleWalletUrl(wallet: Wallet, pass: Pass, geofen
   return url
 }
 
-export async function updateGoogleWalletObject(wallet: Wallet, pass: Pass): Promise<void> {
+export async function updateGoogleWalletObject(wallet: Wallet, pass: Pass, branding: PlatformBranding | null = null): Promise<void> {
   const auth = getAuth()
   const client = await auth.getClient()
   const objectId = buildObjectId(pass.token)
@@ -284,7 +289,7 @@ export async function updateGoogleWalletObject(wallet: Wallet, pass: Pass): Prom
   await client.request({
     url: `${BASE_URL}/loyaltyObject/${objectId}`,
     method: 'PUT',
-    data: buildLoyaltyObject(wallet, pass),
+    data: buildLoyaltyObject(wallet, pass, branding),
   }).catch(e => {
     logger.error({ objectId, err: (e as Error).message }, '[GoogleWallet] updateGoogleWalletObject error')
     return null

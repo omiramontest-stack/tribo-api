@@ -118,6 +118,7 @@ import { BuyCreditsUseCase } from '../application/billing/useCases/BuyCreditsUse
 import { HandleStripeWebhookUseCase } from '../application/billing/useCases/HandleStripeWebhookUseCase.js'
 import { billingRoutes } from './routes/billing.routes.js'
 import { createPlanGuard } from './middlewares/checkPlan.js'
+import { BrandingResolver } from '../application/branding/BrandingResolver.js'
 
 // Plugins & routes
 import cookiesPlugin from './plugins/cookies.js'
@@ -157,6 +158,8 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const passEventRepo = new PassEventPrismaRepository(prisma)
   const analyticsRepo = new AnalyticsPrismaRepository(prisma)
   const billingRepo = new BillingPrismaRepository(prisma)
+  const planGuard = createPlanGuard(billingRepo)
+  const brandingResolver = new BrandingResolver(planGuard)
 
   const createTrial = new CreateTrialUseCase(billingRepo, orgRepo)
 
@@ -192,7 +195,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const getWallets = new GetWalletsUseCase(walletRepo, orgRepo)
   const getWalletById = new GetWalletByIdUseCase(walletRepo, orgRepo)
   const deleteWallet = new DeleteWalletUseCase(walletRepo, passRepo, orgRepo)
-  const updateWallet = new UpdateWalletUseCase(walletRepo, walletTierRepo, passRepo, orgRepo)
+  const updateWallet = new UpdateWalletUseCase(walletRepo, walletTierRepo, passRepo, orgRepo, brandingResolver)
 
   // Geofence use cases
   const getGeofences = new GetGeofencesUseCase(geofenceRepo, walletRepo, orgRepo)
@@ -207,14 +210,14 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
 
   // Pass use cases
   const generatePass = new GeneratePassUseCase(walletRepo, passRepo, orgRepo, passEventRepo)
-  const getPassByToken = new GetPassByTokenUseCase(walletRepo, passRepo, effectiveWalletResolver)
+  const getPassByToken = new GetPassByTokenUseCase(walletRepo, passRepo, effectiveWalletResolver, brandingResolver)
   const getPassesByWallet = new GetPassesByWalletUseCase(passRepo, walletRepo, orgRepo)
-  const updatePassData = new UpdatePassDataUseCase(walletRepo, passRepo, orgRepo, cashbackTransactionRepo, passEventRepo, effectiveWalletResolver)
+  const updatePassData = new UpdatePassDataUseCase(walletRepo, passRepo, orgRepo, cashbackTransactionRepo, passEventRepo, effectiveWalletResolver, brandingResolver)
   const deletePass = new DeletePassUseCase(passRepo, walletRepo, orgRepo, passEventRepo)
   const scanDaypass = new ScanDaypassUseCase(passRepo, walletRepo, passEventRepo)
   const getScannedDaypasses = new GetScannedDaypassesUseCase(passRepo, walletRepo, orgRepo)
   const sendPassLink = new SendPassLinkUseCase(passRepo, walletRepo, orgRepo, passEventRepo, passDownloadTokenRepo)
-  const renewPass = new RenewPassUseCase(walletRepo, walletTierRepo, passRepo, orgRepo, passEventRepo)
+  const renewPass = new RenewPassUseCase(walletRepo, walletTierRepo, passRepo, orgRepo, passEventRepo, brandingResolver)
   const unarchivePass = new UnarchivePassUseCase(passRepo, walletRepo, orgRepo)
   const whatsappManager = new WhatsAppSessionManager(prisma)
   const whatsappCleanup = new WhatsAppCleanupWorker(prisma)
@@ -257,7 +260,6 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   const createCheckout = new CreateCheckoutSessionUseCase(billingRepo, stripeService)
   const buyCredits = new BuyCreditsUseCase(billingRepo, stripeService)
   const handleWebhook = new HandleStripeWebhookUseCase(billingRepo, stripeService)
-  const planGuard = createPlanGuard(billingRepo)
 
   // Routes
   app.register(authRoutes(loginUseCase, registerUseCase, googleAuthUseCase, onboardingUseCase, orgRepo, sendVerificationEmail, verifyEmail, requestEmailChange, confirmEmailChange, changePassword, requestPasswordReset, resetPassword, authRepo, createSessionCode, exchangeSessionCode))
@@ -267,7 +269,7 @@ export async function buildApp(): Promise<{ app: FastifyInstance; worker: IWorke
   app.register(walletTierRoutes(listWalletTiers, createWalletTier, updateWalletTier, deleteWalletTier))
   app.register(passRoutes(generatePass, getPassByToken, getPassesByWallet, updatePassData, deletePass, scanDaypass, getCashbackTransactions, getScannedDaypasses, sendPassLink, validateDownloadToken, passRepo, planGuard, sendPassWhatsApp, renewPass, unarchivePass))
   app.register(whatsappRoutes(whatsappManager, orgRepo, sseTokenStore))
-  app.register(appleRoutes(prisma, passRepo, walletRepo, geofenceRepo, validateDownloadToken, redeemDownloadToken, effectiveWalletResolver))
+  app.register(appleRoutes(prisma, passRepo, walletRepo, geofenceRepo, validateDownloadToken, redeemDownloadToken, effectiveWalletResolver, brandingResolver))
   app.register(analyticsRoutes(getOrgAnalytics, getWalletAnalytics))
   app.register(campaignRoutes(createCampaign, previewAudience, scheduleCampaign, cancelCampaign, getCampaigns, getCampaignById, getCampaignStats, planGuard))
   app.register(billingRoutes(getBillingStatus, createCheckout, buyCredits, handleWebhook, billingRepo, stripeService))

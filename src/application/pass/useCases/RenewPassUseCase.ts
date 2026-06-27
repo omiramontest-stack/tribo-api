@@ -12,6 +12,7 @@ import type { StampsRules, BundleRules, PointsRules } from '../../../domain/wall
 import type { PassData } from '../../../domain/pass/entities/PassData.js'
 import { passTierLevel, passCompletedCycles } from '../../../domain/pass/entities/PassData.js'
 import { resolveTargetTierLevel, toEffectiveWallet } from '../../../domain/wallet/entities/WalletTier.js'
+import type { BrandingResolver } from '../../branding/BrandingResolver.js'
 import type { PassEventType } from '../../../domain/analytics/entities/PassEvent.js'
 import { AppError } from '../../common/AppError.js'
 import { sendPassUpdateNotification } from '../../../infrastructure/apple/ApnsService.js'
@@ -68,6 +69,7 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
     private readonly _passRepository: PassRepository,
     private readonly _orgRepository: OrganizationRepository,
     private readonly _passEventRepository: PassEventRepository,
+    private readonly _brandingResolver: BrandingResolver,
   ) {}
 
   async run(dto: RenewPassDto): Promise<Pass> {
@@ -110,11 +112,14 @@ export class RenewPassUseCase implements UseCase<RenewPassDto, Pass> {
 
     const now = new Date().toISOString()
     const redeemEvent = REDEEM_EVENT[type]
-    const pushTokens = await this._passRepository.findPushTokensByPassToken(saved.token)
+    const [pushTokens, branding] = await Promise.all([
+      this._passRepository.findPushTokensByPassToken(saved.token),
+      this._brandingResolver.resolve(dto.organizationId),
+    ])
 
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
-      updateGoogleWalletObject(effectiveWallet, saved),
+      updateGoogleWalletObject(effectiveWallet, saved, branding),
       // Redención contabilizada en el nivel donde se ganó el premio (fromLevel).
       ...(redeemEvent
         ? [this._passEventRepository.save({

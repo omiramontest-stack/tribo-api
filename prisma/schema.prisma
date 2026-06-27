@@ -372,6 +372,8 @@ model Plan {
   smsCampaigns        Boolean @default(false)
   analyticsLevel      String  @default("none")
   geofencesPerWallet  Int     @default(0)
+  /// White-label: si true, oculta el sello "Hecho con TriboWallet" en los pases.
+  removeBranding      Boolean @default(false)
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

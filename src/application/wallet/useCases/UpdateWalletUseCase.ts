@@ -7,6 +7,7 @@ import type { WalletRules } from '../../../domain/wallet/entities/WalletRules.js
 import type { WalletThemeOverrides } from '../../../domain/wallet/entities/WalletTheme.js'
 import { toEffectiveWallet } from '../../../domain/wallet/entities/WalletTier.js'
 import { passTierLevel } from '../../../domain/pass/entities/PassData.js'
+import type { BrandingResolver } from '../../branding/BrandingResolver.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
 import { assertThemeContrast } from '../utils/assertThemeContrast.js'
@@ -33,6 +34,7 @@ export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
     private readonly _tierRepository: WalletTierRepository,
     private readonly _passRepository: PassRepository,
     private readonly _orgRepository: OrganizationRepository,
+    private readonly _brandingResolver: BrandingResolver,
   ) {}
 
   async run(dto: UpdateWalletDto): Promise<Wallet> {
@@ -80,10 +82,11 @@ export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
     // y solo devuelva los passes de esta wallet, no los de otras wallets del dispositivo.
     await this._passRepository.touchAllByWalletId(wallet.id)
 
-    const [passes, pushTokens, tiers] = await Promise.all([
+    const [passes, pushTokens, tiers, branding] = await Promise.all([
       this._passRepository.findAllByWalletId(wallet.id),
       this._passRepository.findAllPushTokensByWalletId(wallet.id),
       this._tierRepository.findByWalletId(wallet.id),
+      this._brandingResolver.resolve(wallet.organizationId),
     ])
 
     if (!passes.length) return
@@ -93,7 +96,7 @@ export class UpdateWalletUseCase implements UseCase<UpdateWalletDto, Wallet> {
     // (un pase en Nivel 2 conserva el diseño de su tier, no el de la wallet base).
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
-      ...passes.map(pass => updateGoogleWalletObject(toEffectiveWallet(wallet, tiers, passTierLevel(pass.data)), pass)),
+      ...passes.map(pass => updateGoogleWalletObject(toEffectiveWallet(wallet, tiers, passTierLevel(pass.data)), pass, branding)),
     ])
   }
 }

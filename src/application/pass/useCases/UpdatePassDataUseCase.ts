@@ -5,6 +5,7 @@ import type { OrganizationRepository } from '../../../domain/organization/reposi
 import type { CashbackTransactionRepository } from '../../../domain/cashback/repository/CashbackTransactionRepository.js'
 import type { PassEventRepository } from '../../../domain/analytics/repository/PassEventRepository.js'
 import type { EffectiveWalletResolver } from '../../wallet/services/EffectiveWalletResolver.js'
+import type { BrandingResolver } from '../../branding/BrandingResolver.js'
 import type { UseCase } from '../../common/UseCase.js'
 import type { UpdatePassDataDto } from '../dto/UpdatePassDataDto.js'
 import type { PassWithWallet } from './GetPassByTokenUseCase.js'
@@ -38,6 +39,7 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     private readonly _cashbackTransactionRepository: CashbackTransactionRepository,
     private readonly _passEventRepository: PassEventRepository,
     private readonly _effectiveWalletResolver: EffectiveWalletResolver,
+    private readonly _brandingResolver: BrandingResolver,
   ) {}
 
   async run(dto: UpdatePassDataDto): Promise<PassWithWallet> {
@@ -124,10 +126,13 @@ export class UpdatePassDataUseCase implements UseCase<UpdatePassDataDto, PassWit
     dto: UpdatePassDataDto,
     result: ActionResult,
   ): Promise<void> {
-    const pushTokens = await this._passRepository.findPushTokensByPassToken(pass.token)
+    const [pushTokens, branding] = await Promise.all([
+      this._passRepository.findPushTokensByPassToken(pass.token),
+      this._brandingResolver.resolve(dto.organizationId),
+    ])
     await Promise.allSettled([
       sendPassUpdateNotification(pushTokens),
-      updateGoogleWalletObject(wallet, pass),
+      updateGoogleWalletObject(wallet, pass, branding),
       this._passEventRepository.save({
         id: randomUUID(),
         organizationId: dto.organizationId,

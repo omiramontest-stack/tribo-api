@@ -14,6 +14,8 @@ export interface Plan {
   smsCampaigns: boolean
   analyticsLevel: AnalyticsLevel
   geofencesPerWallet: number
+  /** White-label: oculta el sello "Hecho con TriboWallet" en los pases. */
+  removeBranding: boolean
   isActive: boolean
   createdAt: string
   updatedAt: string

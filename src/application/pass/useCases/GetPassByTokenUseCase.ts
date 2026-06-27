@@ -2,13 +2,17 @@ import type { WalletRepository } from '../../../domain/wallet/repository/WalletR
 import type { PassRepository } from '../../../domain/pass/repository/PassRepository.js'
 import type { Pass } from '../../../domain/pass/entities/Pass.js'
 import type { Wallet } from '../../../domain/wallet/entities/Wallet.js'
+import type { PlatformBranding } from '../../../domain/branding/PlatformBranding.js'
 import type { EffectiveWalletResolver } from '../../wallet/services/EffectiveWalletResolver.js'
+import type { BrandingResolver } from '../../branding/BrandingResolver.js'
 import type { UseCase } from '../../common/UseCase.js'
 import { AppError } from '../../common/AppError.js'
 
 export interface PassWithWallet {
   pass: Pass
   wallet: Wallet
+  /** Sello de plataforma para el footer de la vista web (null si el plan lo oculta). */
+  branding?: PlatformBranding | null
 }
 
 export class GetPassByTokenUseCase implements UseCase<string, PassWithWallet> {
@@ -16,6 +20,7 @@ export class GetPassByTokenUseCase implements UseCase<string, PassWithWallet> {
     private readonly _walletRepository: WalletRepository,
     private readonly _passRepository: PassRepository,
     private readonly _effectiveWalletResolver: EffectiveWalletResolver,
+    private readonly _brandingResolver: BrandingResolver,
   ) {}
 
   async run(token: string): Promise<PassWithWallet> {
@@ -27,8 +32,11 @@ export class GetPassByTokenUseCase implements UseCase<string, PassWithWallet> {
 
     // Wallet efectiva: la vista web/frontend recibe el diseño (colores, tipografía,
     // reglas) del nivel actual del pase, no el de la wallet base.
-    const effectiveWallet = await this._effectiveWalletResolver.resolve(wallet, pass)
+    const [effectiveWallet, branding] = await Promise.all([
+      this._effectiveWalletResolver.resolve(wallet, pass),
+      this._brandingResolver.resolve(wallet.organizationId),
+    ])
 
-    return { pass, wallet: effectiveWallet }
+    return { pass, wallet: effectiveWallet, branding }
   }
 }

@@ -132,7 +132,13 @@ export function createPlanGuard(billingRepo: BillingRepository) {
     return { allowed: plan.geofencesPerWallet > 0, limit: plan.geofencesPerWallet }
   }
 
-  return { requireSubscription, requireFeature, checkWalletLimit, checkPassLimit, checkFeatureAllowed, checkGeofenceLimit }
+  /** True si el pase debe mostrar el sello de TriboWallet (plan sin white-label o sin sub). */
+  async function checkBrandingVisible(organizationId: string): Promise<boolean> {
+    const plan = await getActivePlan(organizationId)
+    return !plan?.removeBranding
+  }
+
+  return { requireSubscription, requireFeature, checkWalletLimit, checkPassLimit, checkFeatureAllowed, checkGeofenceLimit, checkBrandingVisible }
 }
 
 export type PlanGuard = ReturnType<typeof createPlanGuard>

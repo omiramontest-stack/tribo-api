@@ -30,6 +30,7 @@ const BASE_PLAN: Plan = {
   emailCampaigns: true,
   smsCampaigns: true,
   analyticsLevel: 'basic',
+  removeBranding: false,
   isActive: true,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),

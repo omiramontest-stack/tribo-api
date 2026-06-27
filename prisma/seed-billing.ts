@@ -74,6 +74,7 @@ async function main() {
       emailCampaigns: true,
       smsCampaigns: true,
       analyticsLevel: 'full',
+      removeBranding: true,
       isActive: true,
     },
     create: {
@@ -87,6 +88,7 @@ async function main() {
       emailCampaigns: true,
       smsCampaigns: true,
       analyticsLevel: 'full',
+      removeBranding: true,
       isActive: true,
     },
   })
