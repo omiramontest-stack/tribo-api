@@ -61,12 +61,14 @@ export async function generatePkPass(
   const builder = builders[wallet.rules.type]
   if (!builder) throw new Error(`No builder registered for wallet type: ${wallet.rules.type}`)
 
-  // Ensure white text (foreground) has WCAG AA contrast against the brand primary color.
-  // If the brand color is too light, darken it automatically before generating the pass.
-  const safeWallet: Wallet = {
-    ...wallet,
-    primaryColor: ensureWcagContrast(wallet.primaryColor),
-  }
+  // El guard de contraste asume texto BLANCO: oscurece un fondo demasiado claro
+  // para que el blanco sea legible. Solo lo aplicamos cuando el texto efectivo es
+  // blanco; si el negocio eligió un color de texto propio, respetamos su diseño —
+  // la legibilidad ya se valida al guardar (assertThemeContrast).
+  const isWhiteText = resolveWalletTheme(wallet).colors.foreground.toUpperCase() === '#FFFFFF'
+  const safeWallet: Wallet = isWhiteText
+    ? { ...wallet, primaryColor: ensureWcagContrast(wallet.primaryColor) }
+    : wallet
 
   const [passJson, extraAssets] = await Promise.all([
     builder.buildJson(safeWallet, pass, recentTransactions, geofences),
