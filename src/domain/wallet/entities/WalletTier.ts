@@ -42,6 +42,7 @@ export interface WalletTier {
   unlockRule: UpgradeRule
   createdAt: string
   updatedAt: string
+  /** Soft delete: nunca se borra físicamente — se conserva para recuperación. */
   deletedAt: string | null
 }
 
